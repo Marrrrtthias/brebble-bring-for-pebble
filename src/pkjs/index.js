@@ -151,7 +151,8 @@ Pebble.addEventListener('appmessage', function (e) {
       sendNotConfigured();
       return;
     }
-    var name = (payload.itemName || '').trim();
+    // Dictation often appends sentence punctuation ("Milk."); drop it.
+    var name = Text.stripTrailingPunctuation((payload.itemName || '').trim());
     if (!name) {
       doSync();
       return;

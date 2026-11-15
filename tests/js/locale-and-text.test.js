@@ -3,6 +3,7 @@ var test = require('node:test');
 var assert = require('node:assert');
 var Locale = require('../../src/pkjs/locale');
 var truncateText = require('../../src/pkjs/text').truncateText;
+var stripTrailingPunctuation = require('../../src/pkjs/text').stripTrailingPunctuation;
 
 test('languageCode handles both separators and case', function () {
   assert.strictEqual(Locale.languageCode('de-DE'), 'de');
@@ -45,4 +46,21 @@ test('a truncated list name fits the watch message buffer', function () {
   // and the longest localized template is checked in tests/c/test_strings.c.
   var worst = truncateText('€'.repeat(100), 40);
   assert.ok(Buffer.byteLength(worst, 'utf8') <= 123);
+});
+
+test('stripTrailingPunctuation removes dictation-added trailing punctuation', function () {
+  assert.strictEqual(stripTrailingPunctuation('Milk.'), 'Milk');
+  assert.strictEqual(stripTrailingPunctuation('Milk?'), 'Milk');
+  assert.strictEqual(stripTrailingPunctuation('Eier, Milch!'), 'Eier, Milch');
+  assert.strictEqual(stripTrailingPunctuation('Milk ...'), 'Milk');
+  assert.strictEqual(stripTrailingPunctuation('Milk\u2026'), 'Milk');
+  assert.strictEqual(stripTrailingPunctuation('\u7261\u4E73\u3002'), '\u7261\u4E73');
+});
+
+test('stripTrailingPunctuation keeps meaningful characters', function () {
+  assert.strictEqual(stripTrailingPunctuation('Milk'), 'Milk');
+  assert.strictEqual(stripTrailingPunctuation('Milk 3.5%'), 'Milk 3.5%');
+  assert.strictEqual(stripTrailingPunctuation('Chips (large)'), 'Chips (large)');
+  assert.strictEqual(stripTrailingPunctuation('0.5 l Milch'), '0.5 l Milch');
+  assert.strictEqual(stripTrailingPunctuation('?!'), '');
 });
