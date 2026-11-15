@@ -38,7 +38,7 @@ function sendError(code, detail) {
   Pebble.sendAppMessage(msg);
 }
 
-function sendItemsThenDone(items) {
+function sendItemsThenDone(items, locale) {
   function afterStart() {
     var i = 0;
     function sendNext() {
@@ -54,7 +54,7 @@ function sendItemsThenDone(items) {
           itemIndex: index,
           itemName: item.name,
           itemDone: item.done ? 1 : 0,
-          itemIcon: Categorize.categorize(item.name)
+          itemIcon: Categorize.categorize(item.name, locale)
         },
         function () { i++; sendNext(); },
         function () { i++; sendNext(); } // best-effort: skip a dropped item instead of stalling the sync
@@ -96,7 +96,9 @@ function doSync() {
       for (i = 0; i < items.recently.length; i++) {
         merged.push({ name: items.recently[i].itemId, done: true });
       }
-      sendItemsThenDone(merged.slice(0, MAX_ITEMS));
+      // Item names arrive in the Bring! account's language, so that decides
+      // which keywords to use; the watch language is only a fallback.
+      sendItemsThenDone(merged.slice(0, MAX_ITEMS), state.locale || currentWatchLocale());
     });
   });
 }
