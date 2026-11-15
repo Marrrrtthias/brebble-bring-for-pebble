@@ -16,7 +16,7 @@ The app follows the language set on the watch. Supported: English (default and
 fallback), Spanish, German, French, Italian and Portuguese.
 
 - The watch UI, including error messages, is localized in
-  `src/c/bring_pebble.c` (the `STRINGS` table). The language is read with
+  `src/c/strings.c` (the `STRINGS` table). The language is read with
   `i18n_get_system_locale()`.
 - The phone never sends error text, only error codes, so errors also appear in
   the watch's language.
@@ -24,7 +24,7 @@ fallback), Spanish, German, French, Italian and Portuguese.
   request), falling back to the phone's language, then English.
 - Catalog items are translated to the Bring! account's language (see below).
 
-To add a language, add an entry to `STRINGS` in `src/c/bring_pebble.c` and to
+To add a language, add an entry to `STRINGS` in `src/c/strings.c` and to
 `TEXTS` in `src/pkjs/config.js`, and optionally keywords to
 `src/pkjs/categorize.js`.
 
