@@ -387,6 +387,7 @@ function updateItem(state, itemName, operation, callback) {
 }
 
 module.exports = {
+  BRING_DEFAULT_LOCALE: BRING_DEFAULT_LOCALE,
   loadState: loadState,
   saveState: saveState,
   saveConfigError: saveConfigError,

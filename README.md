@@ -84,9 +84,10 @@ pebble install --phone <ip>           # install on a paired, real watch
   `en-US`, `fr-FR`, etc.; see `BRING_SUPPORTED_LOCALES` in `bring-api.js`); a
   very specific regional variant not listed there may not be translated.
 - **Item icons**: category icons are guessed from keywords in the language of
-  your Bring! account (falling back to the watch language, then English).
-  Only that language's keywords are used, so a name in another language, or
-  an unrecognized name, gets the default icon. Matching depends on the
+  your Bring! account (or German, Bring!'s catalog language, when the account
+  language can't be determined). Only that language's keywords are used, so a
+  name in another language, an unrecognized name, or any item on an account in
+  a language without keywords (e.g. Dutch) gets the default icon. Matching depends on the
   language: German matches keywords at the end of a word (compounds such as
   "Vollmilch"), all other languages match whole words including common
   plural forms ("tomatoes", "limones"). German, French, Italian and

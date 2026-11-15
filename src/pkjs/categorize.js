@@ -2,9 +2,11 @@
 // for the watch's list rows. Bring! doesn't expose a category for
 // custom/free-text items, so this just keyword-matches the name.
 //
-// Only the keywords of the user's own language are used (see languageOf()):
-// short words from other languages cause false positives ('lait' vs. the
-// French 'laitue'). How a keyword is matched depends on the language:
+// Only the keywords of the language the item names are in are used (the
+// caller passes that locale; see languageOf()): short words from other
+// languages cause false positives ('lait' vs. the French 'laitue'). For a
+// language without a keyword table nothing is matched and every item gets
+// the default icon. How a keyword is matched depends on the language:
 //   'plural': whole word or phrase, also in the language's common plural
 //             forms ('tomato' matches 'tomatoes', 'limón' matches 'limones').
 //             Never matches inside another word ('tea' does not hit 'steak').
@@ -23,8 +25,6 @@ var CATEGORY_VEGETABLE = 4;
 var CATEGORY_MEAT = 5;
 var CATEGORY_DRINK = 6;
 var CATEGORY_CLEANING = 7;
-
-var DEFAULT_LANGUAGE = 'en';
 
 // Rules per language. Ties between equally long keywords go to the first category.
 var KEYWORDS = {
@@ -91,12 +91,12 @@ var KEYWORDS = {
     { category: CATEGORY_DAIRY, words: ['latte', 'formaggio', 'burro'] },
     { category: CATEGORY_FRUIT, words: ['mela', 'fragola', 'limone'] },
     { category: CATEGORY_VEGETABLE, words: ['verdura', 'patata', 'cipolla'] },
-    { category: CATEGORY_MEAT, words: ['carne', 'pollo', 'pesce', 'prosciutto', 'uovo'] },
+    { category: CATEGORY_MEAT, words: ['carne', 'pollo', 'pesce', 'prosciutto', 'uovo', 'uova'] },
     { category: CATEGORY_DRINK, words: ['acqua', 'succo', 'birra', 'vino'] },
     { category: CATEGORY_CLEANING, words: ['sapone', 'detersivo'] }
   ] },
   pt: { match: 'plural', rules: [
-    { category: CATEGORY_BREAD, words: ['pão', 'pao'] },
+    { category: CATEGORY_BREAD, words: ['pão', 'pães', 'pao', 'paes'] },
     { category: CATEGORY_DAIRY, words: ['leite', 'queijo', 'manteiga'] },
     { category: CATEGORY_FRUIT, words: ['maçã', 'morango', 'laranja'] },
     { category: CATEGORY_VEGETABLE, words: ['legume', 'batata', 'cenoura'] },
@@ -106,10 +106,10 @@ var KEYWORDS = {
   ] }
 };
 
-// "de-DE" / "de_DE" / "de" -> "de"; unknown or missing -> English.
+// "de-DE" / "de_DE" / "de" -> "de"; null when there is no keyword table for it.
 function languageOf(locale) {
   var code = String(locale || '').substring(0, 2).toLowerCase();
-  return KEYWORDS[code] ? code : DEFAULT_LANGUAGE;
+  return KEYWORDS[code] ? code : null;
 }
 
 // Accented last letter -> plain letter, for Spanish plurals (limón -> limones).
@@ -139,6 +139,8 @@ function variants(word, language) {
       break;
     case 'pt':
       list.push(word + 's', word + 'es');
+      // -ão -> -ões (sabão -> sabões); irregular ones such as pão -> pães
+      // are listed as keywords of their own.
       if (word.length > 2 && word.substring(word.length - 2) === 'ão') {
         list.push(word.substring(0, word.length - 2) + 'ões');
       }
@@ -153,8 +155,11 @@ function endsWith(text, suffix) {
 
 function categorize(itemName, locale) {
   var language = languageOf(locale);
+  if (!language) {
+    return CATEGORY_DEFAULT;
+  }
   var config = KEYWORDS[language];
-  var words = String(itemName || '').toLowerCase().split(/[^a-zà-ÿœ]+/).filter(Boolean);
+  var words = String(itemName || '').toLowerCase().split(/[^a-zßà-ÿœ]+/).filter(Boolean);
   var padded = ' ' + words.join(' ') + ' ';
   var best = CATEGORY_DEFAULT;
   var bestLength = 0;

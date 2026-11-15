@@ -96,9 +96,9 @@ function doSync() {
       for (i = 0; i < items.recently.length; i++) {
         merged.push({ name: items.recently[i].itemId, done: true });
       }
-      // Item names arrive in the Bring! account's language, so that decides
-      // which keywords to use; the watch language is only a fallback.
-      sendItemsThenDone(merged.slice(0, MAX_ITEMS), state.locale || currentWatchLocale());
+      // Item names are in the Bring! account's language. If that couldn't be
+      // determined, catalog items were left untranslated, i.e. in German.
+      sendItemsThenDone(merged.slice(0, MAX_ITEMS), state.locale || BringApi.BRING_DEFAULT_LOCALE);
     });
   });
 }
