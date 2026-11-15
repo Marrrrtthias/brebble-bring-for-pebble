@@ -25,8 +25,8 @@ fallback), Spanish, German, French, Italian and Portuguese.
 - Catalog items are translated to the Bring! account's language (see below).
 
 To add a language, add an entry to `STRINGS` in `src/c/strings.c` and to
-`TEXTS` in `src/pkjs/config.js`, and optionally keywords to
-`src/pkjs/categorize.js`.
+`TEXTS` in `src/pkjs/config.js`, and optionally a keyword
+list for that language in `src/pkjs/categorize.js`.
 
 ## How it works
 
@@ -83,8 +83,12 @@ pebble install --phone <ip>           # install on a paired, real watch
   public locale dictionary. This covers the most common languages (`es-ES`,
   `en-US`, `fr-FR`, etc.; see `BRING_SUPPORTED_LOCALES` in `bring-api.js`); a
   very specific regional variant not listed there may not be translated.
-- **Item icons**: category icons are guessed from keywords in six languages;
-  unrecognized names get a default icon.
+- **Item icons**: category icons are guessed from keywords in the language of
+  your Bring! account (falling back to the watch language, then English).
+  Only that language's keywords are used, so a name in another language, or
+  an unrecognized name, gets the default icon. German, French, Italian and
+  Portuguese have short keyword lists so far; Spanish and English are the
+  most complete.
 
 ## Tested
 
