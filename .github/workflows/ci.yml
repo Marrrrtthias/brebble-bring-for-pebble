@@ -45,8 +45,13 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
+      # pebble-tool creates oauth_firebase lazily from two threads on first
+      # use and can crash with FileExistsError; creating it up front avoids
+      # that race.
       - name: Install pebble-tool
-        run: uv tool install --python 3.13 "pebble-tool==${PEBBLE_TOOL_VERSION}"
+        run: |
+          uv tool install --python 3.13 "pebble-tool==${PEBBLE_TOOL_VERSION}"
+          mkdir -p ~/.local/share/pebble-sdk/oauth_firebase
 
       - name: Cache Pebble SDK
         uses: actions/cache@v4
@@ -54,9 +59,11 @@ jobs:
           path: ~/.local/share/pebble-sdk/SDKs
           key: pebble-sdk-${{ env.PEBBLE_SDK_VERSION }}-tool-${{ env.PEBBLE_TOOL_VERSION }}
 
+      # Checks the SDK directory rather than `pebble sdk list`, whose output
+      # also lists SDKs that are only available for download.
       - name: Install Pebble SDK
         run: |
-          if pebble sdk list 2>/dev/null | grep -qE "^${PEBBLE_SDK_VERSION}( |$)"; then
+          if [ -d ~/.local/share/pebble-sdk/SDKs/"${PEBBLE_SDK_VERSION}" ]; then
             pebble sdk activate "${PEBBLE_SDK_VERSION}"
           else
             pebble sdk install "${PEBBLE_SDK_VERSION}" < /dev/null
