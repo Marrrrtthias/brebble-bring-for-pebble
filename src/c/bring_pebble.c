@@ -87,6 +87,26 @@ static void detect_language(void) {
   s_strings = strings_for_locale(i18n_get_system_locale()); // e.g. "de_DE"
 }
 
+// Removes a trailing incomplete UTF-8 sequence, left behind when a long
+// localized message was truncated to fit the buffer, so it never ends in half
+// of a multi-byte character.
+static void truncate_utf8_in_place(char *buf) {
+  size_t len = strlen(buf);
+  size_t lead = len;
+  while (lead > 0 && ((unsigned char)buf[lead - 1] & 0xC0) == 0x80) {
+    lead--; // skip continuation bytes
+  }
+  if (lead == 0) {
+    return;
+  }
+  lead--; // index of the lead byte of the last character
+  unsigned char c = (unsigned char)buf[lead];
+  size_t expected = (c >= 0xF0) ? 4 : (c >= 0xE0) ? 3 : (c >= 0xC0) ? 2 : 1;
+  if (len - lead < expected) {
+    buf[lead] = '\0';
+  }
+}
+
 static void set_error_message(BringError code, const char *detail) {
   const char *text = s_strings->err_generic;
   switch (code) {
@@ -97,11 +117,13 @@ static void set_error_message(BringError code, const char *detail) {
     case ERR_PHONE:         text = s_strings->err_phone; break;
     case ERR_LIST_NOT_FOUND:
       snprintf(s_message_text, sizeof(s_message_text), s_strings->err_list_not_found, detail ? detail : "");
+      truncate_utf8_in_place(s_message_text);
       return;
     default: break;
   }
   strncpy(s_message_text, text, sizeof(s_message_text) - 1);
   s_message_text[sizeof(s_message_text) - 1] = '\0';
+  truncate_utf8_in_place(s_message_text);
 }
 
 

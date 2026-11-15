@@ -11,7 +11,7 @@ function pageShell(lang, title, bodyHtml, script) {
   return '' +
     '<!DOCTYPE html><html lang="' + lang + '"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<title>Bring! for Pebble</title>' +
+    '<title>' + title + '</title>' +
     '<style>' +
     'body{font-family:sans-serif;margin:0;padding:16px;background:#fff;color:#222;}' +
     'h1{font-size:18px;}' +
@@ -19,7 +19,6 @@ function pageShell(lang, title, bodyHtml, script) {
     'label{display:block;margin-top:12px;font-size:13px;color:#555;}' +
     'input{width:100%;box-sizing:border-box;padding:8px;font-size:16px;margin-top:4px;}' +
     'button{margin-top:16px;width:100%;padding:12px;font-size:16px;background:#e94e3c;color:#fff;border:none;border-radius:4px;}' +
-    '.err{margin-top:12px;font-size:13px;color:#c0392b;white-space:pre-wrap;}' +
     '</style></head><body>' +
     '<h1>' + title + '</h1>' +
     bodyHtml +

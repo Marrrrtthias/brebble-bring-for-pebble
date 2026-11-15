@@ -57,8 +57,17 @@ function saveConfigError(code, detail) {
 function loadConfigError() {
   try {
     var raw = localStorage.getItem('bring_configError');
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) {
+    if (!raw) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      // Legacy value from before error codes: a plain text message. Show a
+      // generic error rather than silently reporting "not configured".
+      return { code: 0, detail: '' };
+    }
+  } catch (e2) {
     return null;
   }
 }

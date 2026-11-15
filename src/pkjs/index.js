@@ -159,12 +159,27 @@ Pebble.addEventListener('appmessage', function (e) {
   }
 });
 
+// The watch's current language, preferring the live value from the Pebble app
+// over the one remembered from the last sync (the user may have changed the
+// watch language since).
+function currentWatchLocale() {
+  try {
+    var info = Pebble.getActiveWatchInfo && Pebble.getActiveWatchInfo();
+    if (info && info.language) {
+      return String(info.language);
+    }
+  } catch (e) {
+    // No watch connected: fall through to the remembered value.
+  }
+  return localStorage.getItem('bring_watchLocale') || '';
+}
+
 Pebble.addEventListener('showConfiguration', function () {
   var current = BringApi.loadState();
   Pebble.openURL(Config.buildCredentialsUrl({
     email: current.email,
     listName: current.listName,
-    locale: localStorage.getItem('bring_watchLocale') || ''
+    locale: currentWatchLocale()
   }));
 });
 
