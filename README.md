@@ -88,8 +88,10 @@ pebble install --phone <ip>           # install on a paired, real watch
 
 ## Tested
 
-- `pebble build` compiled without errors on all 7 platforms (before the
-  localization work; rebuild to verify).
+- `pebble build` compiles without errors on all 7 platforms.
+- Localization was checked in the `emery` emulator by temporarily forcing
+  each locale: accented characters (é, ó, è, ç, õ, ü, ö) render correctly in
+  the message screens and in the menu rows and section header.
 - The `AppMessage` round trip (watch ⇄ pkjs) was tested in the `emery`
   emulator: the watch requests a sync, the phone answers, and the watch shows
   the "not configured" state correctly.

@@ -109,7 +109,7 @@ static const Strings STRINGS[] = {
     "Could not log in to Bring!. Check your email and password in Settings.",
     "Your Bring! account has no lists.",
     "No list named \"%s\" was found. Check the name in Settings." },
-  { "es", s_strings->add_item, s_strings->add_item_hint, "Lista de compras",
+  { "es", "+ Agregar item", "Dictado por voz", "Lista de compras",
     "Sincronizando con Bring!...",
     "Configura tu cuenta de Bring!\n\nEn el teléfono: app Pebble > esta app > Configuración.",
     "No se pudo conectar con el teléfono.\n\nRevisa que la app Pebble esté abierta y Bluetooth conectado.",
