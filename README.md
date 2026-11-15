@@ -86,7 +86,10 @@ pebble install --phone <ip>           # install on a paired, real watch
 - **Item icons**: category icons are guessed from keywords in the language of
   your Bring! account (falling back to the watch language, then English).
   Only that language's keywords are used, so a name in another language, or
-  an unrecognized name, gets the default icon. German, French, Italian and
+  an unrecognized name, gets the default icon. Matching depends on the
+  language: German matches keywords at the end of a word (compounds such as
+  "Vollmilch"), all other languages match whole words including common
+  plural forms ("tomatoes", "limones"). German, French, Italian and
   Portuguese have short keyword lists so far; Spanish and English are the
   most complete.
 

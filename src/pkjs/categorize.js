@@ -4,12 +4,15 @@
 //
 // Only the keywords of the user's own language are used (see languageOf()):
 // short words from other languages cause false positives ('lait' vs. the
-// French 'laitue'). Each language has two lists per category:
-//   words: substring match (forgiving about plurals and compound words)
-//   exact: whole-word/phrase match, for short or ambiguous words
-// Whole-word matches are tried first and the longest keyword wins, so
-// "pomme de terre" (potato) beats "pomme" (apple); substring matches are
-// the fallback.
+// French 'laitue'). How a keyword is matched depends on the language:
+//   'plural': whole word or phrase, also in the language's common plural
+//             forms ('tomato' matches 'tomatoes', 'limón' matches 'limones').
+//             Never matches inside another word ('tea' does not hit 'steak').
+//   'suffix': German builds compound nouns whose head noun comes last
+//             ('Vollmilch', 'Kartoffelsalat'), so a keyword also matches at
+//             the end of a word (keywords under 3 letters must match whole).
+// Across all categories the longest matching keyword wins, so "pomme de
+// terre" (potato) beats "pomme" (apple) and "schwein" beats "wein".
 
 // Must match the ICON_* order in src/c/bring_pebble.c's icon lookup table.
 var CATEGORY_DEFAULT = 0;
@@ -23,96 +26,84 @@ var CATEGORY_CLEANING = 7;
 
 var DEFAULT_LANGUAGE = 'en';
 
-// Rule order matters only for substring matches: the first category with a hit wins.
+// Rules per language. Ties between equally long keywords go to the first category.
 var KEYWORDS = {
-  en: [
-    { category: CATEGORY_BREAD, words: ['bread', 'baguette', 'croissant'], exact: [] },
-    { category: CATEGORY_DAIRY, words: ['milk', 'yogurt', 'cheese', 'butter', 'cream'], exact: [] },
+  en: { match: 'plural', rules: [
+    { category: CATEGORY_BREAD, words: ['bread', 'baguette', 'croissant'] },
+    { category: CATEGORY_DAIRY, words: ['milk', 'yogurt', 'cheese', 'butter', 'cream'] },
     { category: CATEGORY_FRUIT, words: [
       'apple', 'banana', 'orange', 'pear', 'strawberry', 'grape', 'lemon', 'watermelon', 'melon',
-      'kiwi', 'pineapple', 'peach', 'plum', 'fruit'
-    ], exact: [] },
+      'kiwi', 'pineapple', 'peach', 'plum', 'fruit'] },
     { category: CATEGORY_VEGETABLE, words: [
       'lettuce', 'tomato', 'potato', 'onion', 'carrot', 'broccoli', 'spinach', 'cucumber',
-      'pepper', 'garlic', 'squash', 'vegetable', 'corn'
-    ], exact: [] },
+      'pepper', 'garlic', 'squash', 'vegetable', 'corn'] },
     { category: CATEGORY_MEAT, words: [
-      'meat', 'chicken', 'fish', 'pork', 'ham', 'sausage', 'steak', 'hamburger', 'tuna', 'egg'
-    ], exact: [] },
+      'meat', 'chicken', 'fish', 'pork', 'ham', 'sausage', 'steak', 'hamburger', 'tuna', 'egg'] },
     { category: CATEGORY_DRINK, words: [
-      'water', 'soda', 'juice', 'beer', 'wine', 'coffee', 'tea', 'drink', 'coke', 'fanta', 'sprite'
-    ], exact: [] },
+      'water', 'soda', 'juice', 'beer', 'wine', 'coffee', 'tea', 'drink', 'coke', 'fanta', 'sprite'] },
     { category: CATEGORY_CLEANING, words: [
-      'soap', 'cleaner', 'shampoo', 'toilet paper', 'napkin', 'sponge', 'bleach', 'detergent'
-    ], exact: [] }
-  ],
-  es: [
+      'soap', 'cleaner', 'shampoo', 'toilet paper', 'napkin', 'sponge', 'bleach', 'detergent'] }
+  ] },
+  es: { match: 'plural', rules: [
     { category: CATEGORY_BREAD, words: [
       'pan', 'pan de miga', 'tostado', 'tostadas', 'baguette', 'panaderia', 'panadería',
-      'factura', 'facturas', 'medialuna', 'medialunas', 'croissant', 'bizcocho'
-    ], exact: [] },
+      'factura', 'facturas', 'medialuna', 'medialunas', 'croissant', 'bizcocho'] },
     { category: CATEGORY_DAIRY, words: [
-      'leche', 'yogur', 'queso', 'manteca', 'mantequilla', 'crema', 'dulce de leche', 'ricota'
-    ], exact: [] },
+      'leche', 'yogur', 'queso', 'manteca', 'mantequilla', 'crema', 'dulce de leche', 'ricota'] },
     { category: CATEGORY_FRUIT, words: [
       'manzana', 'banana', 'platano', 'plátano', 'naranja', 'pera', 'frutilla', 'fresa', 'uva',
       'uvas', 'limon', 'limón', 'sandia', 'sandía', 'melon', 'melón', 'kiwi', 'anana', 'ananas',
-      'piña', 'durazno', 'ciruela', 'mandarina', 'fruta'
-    ], exact: [] },
+      'piña', 'durazno', 'ciruela', 'mandarina', 'fruta'] },
     { category: CATEGORY_VEGETABLE, words: [
       'lechuga', 'tomate', 'papa', 'patata', 'cebolla', 'zanahoria', 'brocoli', 'brócoli',
-      'espinaca', 'pepino', 'pimiento', 'ajo', 'zapallo', 'calabaza', 'verdura', 'vegetal', 'choclo'
-    ], exact: [] },
+      'espinaca', 'pepino', 'pimiento', 'ajo', 'zapallo', 'calabaza', 'verdura', 'vegetal', 'choclo'] },
     { category: CATEGORY_MEAT, words: [
       'carne', 'pollo', 'pescado', 'cerdo', 'jamon', 'jamón', 'salchicha', 'milanesa', 'bife',
-      'chorizo', 'hamburguesa', 'atun', 'atún', 'huevo', 'huevos'
-    ], exact: [] },
+      'chorizo', 'hamburguesa', 'atun', 'atún', 'huevo', 'huevos'] },
     { category: CATEGORY_DRINK, words: [
       'agua', 'gaseosa', 'jugo', 'cerveza', 'vino', 'cafe', 'café', 'té', 'bebida', 'coca',
-      'fanta', 'sprite'
-    ], exact: ['te'] },
+      'fanta', 'sprite', 'te'] },
     { category: CATEGORY_CLEANING, words: [
       'detergente', 'lavandina', 'jabon', 'jabón', 'limpiador', 'shampoo', 'champu', 'champú',
       'papel higienico', 'papel higiénico', 'servilleta', 'servilletas', 'esponja', 'lejia',
-      'lejía', 'suavizante'
-    ], exact: [] }
-  ],
-  de: [
-    { category: CATEGORY_BREAD, words: [], exact: ['brot', 'brötchen'] },
-    { category: CATEGORY_DAIRY, words: [], exact: ['milch', 'käse', 'butter', 'joghurt'] },
-    { category: CATEGORY_FRUIT, words: [], exact: ['apfel', 'banane', 'obst'] },
-    { category: CATEGORY_VEGETABLE, words: [], exact: ['gemüse', 'kartoffel', 'zwiebel', 'karotte'] },
-    { category: CATEGORY_MEAT, words: [], exact: ['fleisch', 'hähnchen', 'fisch', 'schinken'] },
-    { category: CATEGORY_DRINK, words: [], exact: ['wasser', 'saft', 'bier', 'wein', 'kaffee', 'tee'] },
-    { category: CATEGORY_CLEANING, words: [], exact: ['seife', 'spülmittel', 'waschmittel'] }
-  ],
-  fr: [
-    { category: CATEGORY_BREAD, words: [], exact: ['pain'] },
-    { category: CATEGORY_DAIRY, words: [], exact: ['lait', 'fromage', 'beurre'] },
-    { category: CATEGORY_FRUIT, words: [], exact: ['pomme', 'fraise', 'citron'] },
-    { category: CATEGORY_VEGETABLE, words: [], exact: ['légume', 'pomme de terre', 'oignon', 'carotte'] },
-    { category: CATEGORY_MEAT, words: [], exact: ['viande', 'poulet', 'poisson', 'jambon', 'oeuf', 'œuf'] },
-    { category: CATEGORY_DRINK, words: [], exact: ['eau', 'jus', 'bière', 'vin', 'thé'] },
-    { category: CATEGORY_CLEANING, words: [], exact: ['savon', 'lessive'] }
-  ],
-  it: [
-    { category: CATEGORY_BREAD, words: [], exact: ['pane'] },
-    { category: CATEGORY_DAIRY, words: [], exact: ['latte', 'formaggio', 'burro'] },
-    { category: CATEGORY_FRUIT, words: [], exact: ['mela', 'fragola', 'limone'] },
-    { category: CATEGORY_VEGETABLE, words: [], exact: ['verdura', 'patata', 'cipolla'] },
-    { category: CATEGORY_MEAT, words: [], exact: ['carne', 'pollo', 'pesce', 'prosciutto', 'uovo'] },
-    { category: CATEGORY_DRINK, words: [], exact: ['acqua', 'succo', 'birra', 'vino'] },
-    { category: CATEGORY_CLEANING, words: [], exact: ['sapone', 'detersivo'] }
-  ],
-  pt: [
-    { category: CATEGORY_BREAD, words: [], exact: ['pão', 'pao'] },
-    { category: CATEGORY_DAIRY, words: [], exact: ['leite', 'queijo', 'manteiga'] },
-    { category: CATEGORY_FRUIT, words: [], exact: ['maçã', 'morango', 'laranja'] },
-    { category: CATEGORY_VEGETABLE, words: [], exact: ['legume', 'batata', 'cenoura'] },
-    { category: CATEGORY_MEAT, words: [], exact: ['carne', 'frango', 'peixe', 'presunto', 'ovo'] },
-    { category: CATEGORY_DRINK, words: [], exact: ['água', 'suco', 'cerveja', 'vinho'] },
-    { category: CATEGORY_CLEANING, words: [], exact: ['sabão', 'sabonete'] }
-  ]
+      'lejía', 'suavizante'] }
+  ] },
+  de: { match: 'suffix', rules: [
+    { category: CATEGORY_BREAD, words: ['brot', 'brötchen'] },
+    { category: CATEGORY_DAIRY, words: ['milch', 'käse', 'butter', 'joghurt'] },
+    { category: CATEGORY_FRUIT, words: ['apfel', 'äpfel', 'banane', 'bananen', 'obst'] },
+    { category: CATEGORY_VEGETABLE, words: ['gemüse', 'kartoffel', 'kartoffeln', 'zwiebel', 'zwiebeln', 'karotte', 'karotten', 'tomate', 'tomaten', 'gurke'] },
+    { category: CATEGORY_MEAT, words: ['fleisch', 'hähnchen', 'fisch', 'schinken', 'schwein', 'ei', 'eier'] },
+    { category: CATEGORY_DRINK, words: ['wasser', 'saft', 'bier', 'wein', 'kaffee', 'tee'] },
+    { category: CATEGORY_CLEANING, words: ['seife', 'spülmittel', 'waschmittel'] }
+  ] },
+  fr: { match: 'plural', rules: [
+    { category: CATEGORY_BREAD, words: ['pain'] },
+    { category: CATEGORY_DAIRY, words: ['lait', 'fromage', 'beurre'] },
+    { category: CATEGORY_FRUIT, words: ['pomme', 'fraise', 'citron'] },
+    { category: CATEGORY_VEGETABLE, words: ['légume', 'pomme de terre', 'pommes de terre', 'oignon', 'carotte'] },
+    { category: CATEGORY_MEAT, words: ['viande', 'poulet', 'poisson', 'jambon', 'oeuf', 'œuf'] },
+    { category: CATEGORY_DRINK, words: ['eau', 'jus', 'bière', 'vin', 'thé'] },
+    { category: CATEGORY_CLEANING, words: ['savon', 'lessive'] }
+  ] },
+  it: { match: 'plural', rules: [
+    { category: CATEGORY_BREAD, words: ['pane'] },
+    { category: CATEGORY_DAIRY, words: ['latte', 'formaggio', 'burro'] },
+    { category: CATEGORY_FRUIT, words: ['mela', 'fragola', 'limone'] },
+    { category: CATEGORY_VEGETABLE, words: ['verdura', 'patata', 'cipolla'] },
+    { category: CATEGORY_MEAT, words: ['carne', 'pollo', 'pesce', 'prosciutto', 'uovo'] },
+    { category: CATEGORY_DRINK, words: ['acqua', 'succo', 'birra', 'vino'] },
+    { category: CATEGORY_CLEANING, words: ['sapone', 'detersivo'] }
+  ] },
+  pt: { match: 'plural', rules: [
+    { category: CATEGORY_BREAD, words: ['pão', 'pao'] },
+    { category: CATEGORY_DAIRY, words: ['leite', 'queijo', 'manteiga'] },
+    { category: CATEGORY_FRUIT, words: ['maçã', 'morango', 'laranja'] },
+    { category: CATEGORY_VEGETABLE, words: ['legume', 'batata', 'cenoura'] },
+    { category: CATEGORY_MEAT, words: ['carne', 'frango', 'peixe', 'presunto', 'ovo'] },
+    { category: CATEGORY_DRINK, words: ['água', 'suco', 'cerveja', 'vinho'] },
+    { category: CATEGORY_CLEANING, words: ['sabão', 'sabonete'] }
+  ] }
 };
 
 // "de-DE" / "de_DE" / "de" -> "de"; unknown or missing -> English.
@@ -121,36 +112,79 @@ function languageOf(locale) {
   return KEYWORDS[code] ? code : DEFAULT_LANGUAGE;
 }
 
+// Accented last letter -> plain letter, for Spanish plurals (limón -> limones).
+var UNACCENT = { 'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u' };
+
+// The forms of a keyword to accept as a whole word, per language.
+function variants(word, language) {
+  var last = word.charAt(word.length - 1);
+  var stem = word.substring(0, word.length - 1);
+  var list = [word];
+  switch (language) {
+    case 'en':
+      list.push(word + 's', word + 'es');
+      if (last === 'y') { list.push(stem + 'ies'); }
+      break;
+    case 'es':
+      list.push(word + 's', word + 'es');
+      if (UNACCENT[last]) { list.push(stem + UNACCENT[last] + 'es'); }
+      if (last === 'z') { list.push(stem + 'ces'); }
+      break;
+    case 'fr':
+      list.push(word + 's', word + 'x');
+      break;
+    case 'it': // plurals change the final vowel: mela -> mele, patata -> patate
+      if (last === 'a') { list.push(stem + 'e'); }
+      if (last === 'o' || last === 'e') { list.push(stem + 'i'); }
+      break;
+    case 'pt':
+      list.push(word + 's', word + 'es');
+      if (word.length > 2 && word.substring(word.length - 2) === 'ão') {
+        list.push(word.substring(0, word.length - 2) + 'ões');
+      }
+      break;
+  }
+  return list;
+}
+
+function endsWith(text, suffix) {
+  return text.length >= suffix.length && text.substring(text.length - suffix.length) === suffix;
+}
+
 function categorize(itemName, locale) {
-  var rules = KEYWORDS[languageOf(locale)];
-  var name = (itemName || '').toLowerCase();
-  var padded = ' ' + name.replace(/[^\wÀ-ÿœ]+/g, ' ') + ' ';
-  var i, j, rule, word;
-  var best = -1;
+  var language = languageOf(locale);
+  var config = KEYWORDS[language];
+  var words = String(itemName || '').toLowerCase().split(/[^a-zà-ÿœ]+/).filter(Boolean);
+  var padded = ' ' + words.join(' ') + ' ';
+  var best = CATEGORY_DEFAULT;
   var bestLength = 0;
-  for (i = 0; i < rules.length; i++) {
-    rule = rules[i];
-    for (j = 0; j < rule.exact.length; j++) {
-      word = rule.exact[j];
-      if (word.length > bestLength && padded.indexOf(' ' + word + ' ') >= 0) {
+  var i, j, k, rule, word, forms;
+
+  function matches(keyword) {
+    if (config.match === 'suffix' && keyword.length >= 3 && keyword.indexOf(' ') < 0) {
+      for (var w = 0; w < words.length; w++) {
+        if (endsWith(words[w], keyword)) { return true; }
+      }
+      return false;
+    }
+    forms = variants(keyword, language);
+    for (k = 0; k < forms.length; k++) {
+      if (padded.indexOf(' ' + forms[k] + ' ') >= 0) { return true; }
+    }
+    return false;
+  }
+
+  for (i = 0; i < config.rules.length; i++) {
+    rule = config.rules[i];
+    for (j = 0; j < rule.words.length; j++) {
+      word = rule.words[j];
+      if (word.length > bestLength && matches(word)) {
         best = rule.category;
         bestLength = word.length;
       }
     }
   }
-  if (best >= 0) {
-    return best;
-  }
-  padded = ' ' + name + ' ';
-  for (i = 0; i < rules.length; i++) {
-    rule = rules[i];
-    for (j = 0; j < rule.words.length; j++) {
-      if (padded.indexOf(rule.words[j]) >= 0) {
-        return rule.category;
-      }
-    }
-  }
-  return CATEGORY_DEFAULT;
+  return best;
 }
 
 module.exports = {
