@@ -72,9 +72,10 @@ jobs:
       - name: Build all platforms
         run: pebble build
 
+      # archive: false uploads the .pbw itself instead of a zip containing it.
       - name: Upload .pbw
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: bring_pebble-pbw
           path: build/*.pbw
+          archive: false
           if-no-files-found: error

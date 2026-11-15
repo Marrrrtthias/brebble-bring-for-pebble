@@ -81,7 +81,7 @@ and that it fits the watch's message buffer.
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the tests and builds the
 `.pbw` for all platforms on every pull request and push to `main`; the built
-`.pbw` is attached to the run as an artifact.
+`.pbw` is attached to the run as an artifact (the file itself, not a zip).
 
 ## Known limitations
 
