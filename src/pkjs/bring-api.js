@@ -44,16 +44,32 @@ function loadState() {
   };
 }
 
-// Remembers why configuration last failed, so the watch can show a useful
+// Remembers why configuration last failed (as an error code the watch
+// localizes), so the watch can show a useful
 // message even if it wasn't open at the moment the phone-side login/list
 // lookup failed (Settings is edited from the phone, not necessarily with
 // the watchapp running).
-function saveConfigError(message) {
-  localStorage.setItem('bring_configError', message || '');
+function saveConfigError(code, detail) {
+  localStorage.setItem('bring_configError', JSON.stringify({ code: code, detail: detail || '' }));
 }
 
+// Returns { code, detail } or null when there is no pending error.
 function loadConfigError() {
-  return localStorage.getItem('bring_configError') || '';
+  try {
+    var raw = localStorage.getItem('bring_configError');
+    if (!raw) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      // Legacy value from before error codes: a plain text message. Show a
+      // generic error rather than silently reporting "not configured".
+      return { code: 0, detail: '' };
+    }
+  } catch (e2) {
+    return null;
+  }
 }
 
 function clearConfigError() {
@@ -371,6 +387,7 @@ function updateItem(state, itemName, operation, callback) {
 }
 
 module.exports = {
+  BRING_DEFAULT_LOCALE: BRING_DEFAULT_LOCALE,
   loadState: loadState,
   saveState: saveState,
   saveConfigError: saveConfigError,

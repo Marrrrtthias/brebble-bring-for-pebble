@@ -1,4 +1,5 @@
 #include <pebble.h>
+#include "strings.h"
 
 // Must match the action values used in src/pkjs/index.js
 typedef enum {
@@ -11,6 +12,17 @@ typedef enum {
   ACTION_NOT_CONFIGURED = 6, // phone -> watch: no Bring! account configured yet
   ACTION_SYNC_START     = 7, // phone -> watch: a fresh item stream is starting, discard the old one
 } BringAction;
+
+// Must match the ERR_* values in src/pkjs/index.js
+typedef enum {
+  ERR_NONE           = 0,
+  ERR_CONNECT_BRING  = 1, // could not authenticate with Bring!
+  ERR_READ_LIST      = 2, // could not read the list
+  ERR_LOGIN          = 3, // login failed while saving the configuration
+  ERR_NO_LISTS       = 4, // the account has no lists
+  ERR_LIST_NOT_FOUND = 5, // errorMsg holds the requested list name
+  ERR_PHONE          = 6, // watch-local: the phone never answered
+} BringError;
 
 #define MAX_ITEMS 80
 #define MAX_NAME_LEN 48
@@ -52,7 +64,9 @@ static GBitmap *s_add_icon;
 static BringItem s_items[MAX_ITEMS];
 static int s_item_count = 0;
 static AppState s_state = STATE_LOADING;
-static char s_message_text[140];
+// Sized for the longest localized message plus a list name of up to
+// MAX_ERROR_DETAIL characters (src/pkjs/index.js).
+static char s_message_text[256];
 
 #define SYNC_RETRY_INTERVAL_MS 4000
 #define MAX_SYNC_RETRIES 6
@@ -61,6 +75,59 @@ static AppTimer *s_retry_timer;
 static int s_retry_count = 0;
 
 static void update_ui(void);
+
+// ---------------------------------------------------------------------------
+// Localization
+//
+// The text tables live in strings.c. The language is picked from the
+// watch's system language (i18n_get_system_locale()).
+// ---------------------------------------------------------------------------
+
+static const Strings *s_strings; // set by detect_language()
+
+static void detect_language(void) {
+  s_strings = strings_for_locale(i18n_get_system_locale()); // e.g. "de_DE"
+}
+
+// Removes a trailing incomplete UTF-8 sequence, left behind when a long
+// localized message was truncated to fit the buffer, so it never ends in half
+// of a multi-byte character.
+static void truncate_utf8_in_place(char *buf) {
+  size_t len = strlen(buf);
+  size_t lead = len;
+  while (lead > 0 && ((unsigned char)buf[lead - 1] & 0xC0) == 0x80) {
+    lead--; // skip continuation bytes
+  }
+  if (lead == 0) {
+    return;
+  }
+  lead--; // index of the lead byte of the last character
+  unsigned char c = (unsigned char)buf[lead];
+  size_t expected = (c >= 0xF0) ? 4 : (c >= 0xE0) ? 3 : (c >= 0xC0) ? 2 : 1;
+  if (len - lead < expected) {
+    buf[lead] = '\0';
+  }
+}
+
+static void set_error_message(BringError code, const char *detail) {
+  const char *text = s_strings->err_generic;
+  switch (code) {
+    case ERR_CONNECT_BRING: text = s_strings->err_connect; break;
+    case ERR_READ_LIST:     text = s_strings->err_read; break;
+    case ERR_LOGIN:         text = s_strings->err_login; break;
+    case ERR_NO_LISTS:      text = s_strings->err_no_lists; break;
+    case ERR_PHONE:         text = s_strings->err_phone; break;
+    case ERR_LIST_NOT_FOUND:
+      snprintf(s_message_text, sizeof(s_message_text), s_strings->err_list_not_found, detail ? detail : "");
+      truncate_utf8_in_place(s_message_text);
+      return;
+    default: break;
+  }
+  strncpy(s_message_text, text, sizeof(s_message_text) - 1);
+  s_message_text[sizeof(s_message_text) - 1] = '\0';
+  truncate_utf8_in_place(s_message_text);
+}
+
 
 // ---------------------------------------------------------------------------
 // AppMessage: outgoing
@@ -77,6 +144,11 @@ static void send_request_sync_message(void) {
     return;
   }
   dict_write_int32(iter, MESSAGE_KEY_action, ACTION_REQUEST_SYNC);
+  // Lets the phone show its configuration page in the watch's language.
+  const char *locale = i18n_get_system_locale();
+  if (locale) {
+    dict_write_cstring(iter, MESSAGE_KEY_locale, locale);
+  }
   app_message_outbox_send();
 }
 
@@ -88,10 +160,7 @@ static void retry_timer_callback(void *data) {
   s_retry_count++;
   if (s_retry_count > MAX_SYNC_RETRIES) {
     s_state = STATE_ERROR;
-    strncpy(s_message_text,
-            "No se pudo conectar con el telefono.\n\nRevisa que la app Pebble este abierta y Bluetooth conectado.",
-            sizeof(s_message_text) - 1);
-    s_message_text[sizeof(s_message_text) - 1] = '\0';
+    set_error_message(ERR_PHONE, NULL);
     update_ui();
     return;
   }
@@ -147,10 +216,10 @@ static void show_message(const char *text) {
 static void update_ui(void) {
   switch (s_state) {
     case STATE_LOADING:
-      show_message("Sincronizando con Bring!...");
+      show_message(s_strings->loading);
       break;
     case STATE_NOT_CONFIGURED:
-      show_message("Configura tu cuenta de Bring!\n\nEn el telefono: app Pebble > esta app > Configuracion.");
+      show_message(s_strings->not_configured);
       break;
     case STATE_ERROR:
       show_message(s_message_text);
@@ -178,7 +247,7 @@ static void dictation_session_callback(DictationSession *session, DictationSessi
 // ---------------------------------------------------------------------------
 // MenuLayer callbacks
 //
-// Section 0 has a single "+ Agregar item" row. Section 1 lists the current
+// Section 0 has a single "+ Add item" row. Section 1 lists the current
 // Bring! items, prefixed with [ ] / [x] to show purchased state.
 // ---------------------------------------------------------------------------
 
@@ -200,13 +269,13 @@ static int16_t menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t s
 static void menu_draw_header_callback(GContext *ctx, const Layer *cell_layer, uint16_t section_index,
                                        void *context) {
   if (section_index == 1) {
-    menu_cell_basic_header_draw(ctx, cell_layer, "Lista de compras");
+    menu_cell_basic_header_draw(ctx, cell_layer, s_strings->list_header);
   }
 }
 
 static void menu_draw_row_callback(GContext *ctx, const Layer *cell_layer, MenuIndex *cell_index, void *context) {
   if (cell_index->section == 0) {
-    menu_cell_basic_draw(ctx, cell_layer, "+ Agregar item", "Dictado por voz", s_add_icon);
+    menu_cell_basic_draw(ctx, cell_layer, s_strings->add_item, s_strings->add_item_hint, s_add_icon);
     return;
   }
 
@@ -282,14 +351,11 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
       update_ui();
       break;
     case ACTION_ERROR: {
+      Tuple *code_t = dict_find(iterator, MESSAGE_KEY_errorCode);
       Tuple *msg_t = dict_find(iterator, MESSAGE_KEY_errorMsg);
       s_state = STATE_ERROR;
-      if (msg_t) {
-        strncpy(s_message_text, msg_t->value->cstring, sizeof(s_message_text) - 1);
-        s_message_text[sizeof(s_message_text) - 1] = '\0';
-      } else {
-        strncpy(s_message_text, "Ocurrio un error al sincronizar.", sizeof(s_message_text) - 1);
-      }
+      set_error_message(code_t ? (BringError)code_t->value->int32 : ERR_NONE,
+                        msg_t ? msg_t->value->cstring : NULL);
       update_ui();
       break;
     }
@@ -376,6 +442,7 @@ static void window_unload(Window *window) {
 }
 
 static void init(void) {
+  detect_language();
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = window_load,

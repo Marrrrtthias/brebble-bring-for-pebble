@@ -1,6 +1,7 @@
 var BringApi = require('./bring-api');
 var Config = require('./config');
 var Categorize = require('./categorize');
+var Text = require('./text');
 
 var ACTION_REQUEST_SYNC = 0;
 var ACTION_SYNC_ITEM = 1;
@@ -10,6 +11,14 @@ var ACTION_ADD_ITEM = 4;
 var ACTION_ERROR = 5;
 var ACTION_NOT_CONFIGURED = 6;
 var ACTION_SYNC_START = 7;
+
+// Error codes sent to the watch, which renders them in its own language.
+// Must match the BringError enum in src/c/bring_pebble.c
+var ERR_CONNECT_BRING = 1;
+var ERR_READ_LIST = 2;
+var ERR_LOGIN = 3;
+var ERR_NO_LISTS = 4;
+var ERR_LIST_NOT_FOUND = 5;
 
 var MAX_ITEMS = 80; // must match MAX_ITEMS in src/c/bring_pebble.c
 
@@ -22,11 +31,21 @@ function sendNotConfigured() {
   Pebble.sendAppMessage({ action: ACTION_NOT_CONFIGURED });
 }
 
-function sendError(message) {
-  Pebble.sendAppMessage({ action: ACTION_ERROR, errorMsg: String(message).substring(0, 120) });
+// Longest detail (the list name) sent with an error, in UTF-16 code units.
+// At most 3 UTF-8 bytes per unit, so <= 120 bytes; together with the longest
+// localized template (~80 bytes) that fits the watch's 256-byte buffer
+// (s_message_text in src/c/bring_pebble.c).
+var MAX_ERROR_DETAIL = 40;
+
+function sendError(code, detail) {
+  var msg = { action: ACTION_ERROR, errorCode: code };
+  if (detail) {
+    msg.errorMsg = Text.truncateText(detail, MAX_ERROR_DETAIL);
+  }
+  Pebble.sendAppMessage(msg);
 }
 
-function sendItemsThenDone(items) {
+function sendItemsThenDone(items, locale) {
   function afterStart() {
     var i = 0;
     function sendNext() {
@@ -42,7 +61,7 @@ function sendItemsThenDone(items) {
           itemIndex: index,
           itemName: item.name,
           itemDone: item.done ? 1 : 0,
-          itemIcon: Categorize.categorize(item.name)
+          itemIcon: Categorize.categorize(item.name, locale)
         },
         function () { i++; sendNext(); },
         function () { i++; sendNext(); } // best-effort: skip a dropped item instead of stalling the sync
@@ -60,7 +79,7 @@ function doSync() {
   if (!isConfigured()) {
     var configError = BringApi.loadConfigError();
     if (configError) {
-      sendError(configError);
+      sendError(configError.code, configError.detail);
     } else {
       sendNotConfigured();
     }
@@ -68,12 +87,12 @@ function doSync() {
   }
   BringApi.ensureAuth(function (authErr, state) {
     if (authErr) {
-      sendError('No se pudo conectar con Bring!: revisa tu configuracion.');
+      sendError(ERR_CONNECT_BRING);
       return;
     }
     BringApi.getListItems(state, function (err, items) {
       if (err) {
-        sendError('Error al leer la lista de Bring!');
+        sendError(ERR_READ_LIST);
         return;
       }
       var merged = [];
@@ -84,7 +103,9 @@ function doSync() {
       for (i = 0; i < items.recently.length; i++) {
         merged.push({ name: items.recently[i].itemId, done: true });
       }
-      sendItemsThenDone(merged.slice(0, MAX_ITEMS));
+      // Item names are in the Bring! account's language. If that couldn't be
+      // determined, catalog items were left untranslated, i.e. in German.
+      sendItemsThenDone(merged.slice(0, MAX_ITEMS), state.locale || BringApi.BRING_DEFAULT_LOCALE);
     });
   });
 }
@@ -98,6 +119,10 @@ Pebble.addEventListener('appmessage', function (e) {
   console.log('appmessage received, action=' + payload.action);
 
   if (payload.action === ACTION_REQUEST_SYNC) {
+    if (payload.locale) {
+      // Remember the watch's language so the config page can match it.
+      localStorage.setItem('bring_watchLocale', String(payload.locale));
+    }
     doSync();
     return;
   }
@@ -110,7 +135,7 @@ Pebble.addEventListener('appmessage', function (e) {
     var toggleOp = payload.itemDone ? 'TO_RECENTLY' : 'TO_PURCHASE';
     BringApi.ensureAuth(function (authErr, state) {
       if (authErr) {
-        sendError('No se pudo conectar con Bring!: revisa tu configuracion.');
+        sendError(ERR_CONNECT_BRING);
         return;
       }
       BringApi.updateItem(state, payload.itemName, toggleOp, function () {
@@ -133,7 +158,7 @@ Pebble.addEventListener('appmessage', function (e) {
     }
     BringApi.ensureAuth(function (authErr, state) {
       if (authErr) {
-        sendError('No se pudo conectar con Bring!: revisa tu configuracion.');
+        sendError(ERR_CONNECT_BRING);
         return;
       }
       BringApi.updateItem(state, name, 'TO_PURCHASE', function () {
@@ -143,9 +168,28 @@ Pebble.addEventListener('appmessage', function (e) {
   }
 });
 
+// The watch's current language, preferring the live value from the Pebble app
+// over the one remembered from the last sync (the user may have changed the
+// watch language since).
+function currentWatchLocale() {
+  try {
+    var info = Pebble.getActiveWatchInfo && Pebble.getActiveWatchInfo();
+    if (info && info.language) {
+      return String(info.language);
+    }
+  } catch (e) {
+    // No watch connected: fall through to the remembered value.
+  }
+  return localStorage.getItem('bring_watchLocale') || '';
+}
+
 Pebble.addEventListener('showConfiguration', function () {
   var current = BringApi.loadState();
-  Pebble.openURL(Config.buildCredentialsUrl({ email: current.email, listName: current.listName }));
+  Pebble.openURL(Config.buildCredentialsUrl({
+    email: current.email,
+    listName: current.listName,
+    locale: currentWatchLocale()
+  }));
 });
 
 Pebble.addEventListener('webviewclosed', function (e) {
@@ -168,11 +212,9 @@ Pebble.addEventListener('webviewclosed', function (e) {
   // blocks requests coming from a browser/webview origin.
   BringApi.authenticateAndListLists(email, password, function (err, state, lists, defaultListUuid) {
     if (err || !lists || !lists.length) {
-      var message = err
-        ? 'No se pudo iniciar sesion en Bring!. Revisa tu email y contrasena desde Configuracion.'
-        : 'Tu cuenta de Bring! no tiene listas.';
-      BringApi.saveConfigError(message);
-      sendError(message); // reaches the watch if it happens to be open right now
+      var code = err ? ERR_LOGIN : ERR_NO_LISTS;
+      BringApi.saveConfigError(code);
+      sendError(code); // reaches the watch if it happens to be open right now
       return;
     }
 
@@ -186,8 +228,8 @@ Pebble.addEventListener('webviewclosed', function (e) {
         }
       }
       if (!chosen) {
-        BringApi.saveConfigError('No se encontro una lista llamada "' + wantedListName + '". Revisa el nombre desde Configuracion.');
-        sendError(BringApi.loadConfigError());
+        BringApi.saveConfigError(ERR_LIST_NOT_FOUND, wantedListName);
+        sendError(ERR_LIST_NOT_FOUND, wantedListName);
         return;
       }
     } else {
