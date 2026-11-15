@@ -4,6 +4,11 @@
   "version": "1.1.0",
   "keywords": ["pebble-app"],
   "private": true,
+  "scripts": {
+    "test": "npm run test:js && npm run test:c",
+    "test:js": "node --test tests/js/*.test.js",
+    "test:c": "mkdir -p build/tests && cc -std=c99 -Wall -Wextra -Werror -Itests/c/stub -o build/tests/test_strings tests/c/test_strings.c src/c/strings.c && build/tests/test_strings"
+  },
   "dependencies": {},
   "pebble": {
     "displayName": "Bring!",

@@ -1,6 +1,7 @@
 var BringApi = require('./bring-api');
 var Config = require('./config');
 var Categorize = require('./categorize');
+var Text = require('./text');
 
 var ACTION_REQUEST_SYNC = 0;
 var ACTION_SYNC_ITEM = 1;
@@ -36,22 +37,10 @@ function sendNotConfigured() {
 // (s_message_text in src/c/bring_pebble.c).
 var MAX_ERROR_DETAIL = 40;
 
-// Cuts text to `max` UTF-16 code units without splitting a surrogate pair
-// (e.g. an emoji), which would otherwise reach the watch as garbage.
-function truncateText(text, max) {
-  text = String(text);
-  if (text.length <= max) {
-    return text;
-  }
-  var code = text.charCodeAt(max - 1);
-  var end = (code >= 0xD800 && code <= 0xDBFF) ? max - 1 : max; // high surrogate: drop it
-  return text.substring(0, end) + '…';
-}
-
 function sendError(code, detail) {
   var msg = { action: ACTION_ERROR, errorCode: code };
   if (detail) {
-    msg.errorMsg = truncateText(detail, MAX_ERROR_DETAIL);
+    msg.errorMsg = Text.truncateText(detail, MAX_ERROR_DETAIL);
   }
   Pebble.sendAppMessage(msg);
 }

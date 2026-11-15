@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PEBBLE_TOOL_VERSION: "5.1.2"
+  PEBBLE_SDK_VERSION: "4.44"
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # JS tests (node --test) plus the host-compiled C string table checks.
+      - name: Run tests
+        run: npm test
+
+  build:
+    name: Build watchapp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Pebble SDK runs webpack for the PebbleKit JS bundle.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install pebble-tool
+        run: uv tool install --python 3.13 "pebble-tool==${PEBBLE_TOOL_VERSION}"
+
+      - name: Cache Pebble SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pebble-sdk/SDKs
+          key: pebble-sdk-${{ env.PEBBLE_SDK_VERSION }}-tool-${{ env.PEBBLE_TOOL_VERSION }}
+
+      - name: Install Pebble SDK
+        run: |
+          if pebble sdk list 2>/dev/null | grep -qE "^${PEBBLE_SDK_VERSION}( |$)"; then
+            pebble sdk activate "${PEBBLE_SDK_VERSION}"
+          else
+            pebble sdk install "${PEBBLE_SDK_VERSION}" < /dev/null
+          fi
+
+      - name: Build all platforms
+        run: pebble build
+
+      - name: Upload .pbw
+        uses: actions/upload-artifact@v4
+        with:
+          name: bring_pebble-pbw
+          path: build/*.pbw
+          if-no-files-found: error

@@ -65,6 +65,24 @@ pebble install --emulator emery       # try it in the emulator (Pebble Time 2)
 pebble install --phone <ip>           # install on a paired, real watch
 ```
 
+## Tests and CI
+
+```sh
+npm test          # all tests
+npm run test:js   # phone-side unit tests (node --test, no dependencies)
+npm run test:c    # watch string tables, compiled on the host with cc
+```
+
+The JS tests cover item categorization, locale handling, text truncation and
+the configuration page, and check that constants shared between the watch (C)
+and the phone (JS) still match. The C test checks every language's string
+table: no missing strings, exactly one `%s` in the list-not-found message,
+and that it fits the watch's message buffer.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the tests and builds the
+`.pbw` for all platforms on every pull request and push to `main`; the built
+`.pbw` is attached to the run as an artifact.
+
 ## Known limitations
 
 - **Round screens (chalk / gabbro)**: the "Shopping list" section title is
