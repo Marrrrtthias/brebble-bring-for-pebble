@@ -64,7 +64,9 @@ static GBitmap *s_add_icon;
 static BringItem s_items[MAX_ITEMS];
 static int s_item_count = 0;
 static AppState s_state = STATE_LOADING;
-static char s_message_text[140];
+// Sized for the longest localized message plus a list name of up to
+// MAX_ERROR_DETAIL characters (src/pkjs/index.js).
+static char s_message_text[256];
 
 #define SYNC_RETRY_INTERVAL_MS 4000
 #define MAX_SYNC_RETRIES 6

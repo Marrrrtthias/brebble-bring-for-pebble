@@ -7,6 +7,8 @@
 // from a browser/webview origin, so this page makes no network calls itself
 // — it only collects input and hands it back via pebblejs://close#....
 
+var Locale = require('./locale');
+
 function pageShell(lang, title, bodyHtml, script) {
   return '' +
     '<!DOCTYPE html><html lang="' + lang + '"><head><meta charset="utf-8">' +
@@ -86,15 +88,8 @@ var TEXTS = {
 // Picks the page language: the watch's language when known (sent by the
 // watch with each sync request, e.g. "de_DE"), else the phone's, else English.
 function pickLanguage(watchLocale) {
-  var candidates = [watchLocale, (typeof navigator !== 'undefined' && navigator.language) || ''];
-  var i, code;
-  for (i = 0; i < candidates.length; i++) {
-    code = String(candidates[i] || '').substring(0, 2).toLowerCase();
-    if (TEXTS[code]) {
-      return code;
-    }
-  }
-  return 'en';
+  var phoneLocale = (typeof navigator !== 'undefined' && navigator.language) || '';
+  return Locale.pickSupported([watchLocale, phoneLocale], TEXTS, 'en');
 }
 
 function escapeAttr(text) {

@@ -16,6 +16,8 @@
 // Across all categories the longest matching keyword wins, so "pomme de
 // terre" (potato) beats "pomme" (apple) and "schwein" beats "wein".
 
+var Locale = require('./locale');
+
 // Must match the ICON_* order in src/c/bring_pebble.c's icon lookup table.
 var CATEGORY_DEFAULT = 0;
 var CATEGORY_BREAD = 1;
@@ -108,8 +110,7 @@ var KEYWORDS = {
 
 // "de-DE" / "de_DE" / "de" -> "de"; null when there is no keyword table for it.
 function languageOf(locale) {
-  var code = String(locale || '').substring(0, 2).toLowerCase();
-  return KEYWORDS[code] ? code : null;
+  return Locale.pickSupported([locale], KEYWORDS, null);
 }
 
 // Accented last letter -> plain letter, for Spanish plurals (limón -> limones).
@@ -153,43 +154,64 @@ function endsWith(text, suffix) {
   return text.length >= suffix.length && text.substring(text.length - suffix.length) === suffix;
 }
 
+// Flattened keyword list per language, built on first use and then reused:
+// [{ category, length, suffix: bool, forms: [' tomato ', ' tomatoes ', ...] }]
+// sorted longest first, so the first match is the longest one. Whole-word
+// forms are stored padded with spaces, ready for indexOf on the padded name.
+var s_compiled = {};
+
+function compile(language) {
+  var config = KEYWORDS[language];
+  var list = [];
+  var i, j, k, word, forms, entry;
+  for (i = 0; i < config.rules.length; i++) {
+    for (j = 0; j < config.rules[i].words.length; j++) {
+      word = config.rules[i].words[j];
+      entry = {
+        category: config.rules[i].category,
+        length: word.length,
+        order: list.length,
+        suffix: config.match === 'suffix' && word.length >= 3 && word.indexOf(' ') < 0,
+        word: word,
+        forms: []
+      };
+      if (!entry.suffix) {
+        forms = variants(word, language);
+        for (k = 0; k < forms.length; k++) {
+          entry.forms.push(' ' + forms[k] + ' ');
+        }
+      }
+      list.push(entry);
+    }
+  }
+  // Longest keyword first; equally long keywords keep table order, so the
+  // earlier category wins a tie.
+  list.sort(function (a, b) { return (b.length - a.length) || (a.order - b.order); });
+  return list;
+}
+
 function categorize(itemName, locale) {
   var language = languageOf(locale);
   if (!language) {
     return CATEGORY_DEFAULT;
   }
-  var config = KEYWORDS[language];
+  var keywords = s_compiled[language] || (s_compiled[language] = compile(language));
   var words = String(itemName || '').toLowerCase().split(/[^a-zßà-ÿœ]+/).filter(Boolean);
   var padded = ' ' + words.join(' ') + ' ';
-  var best = CATEGORY_DEFAULT;
-  var bestLength = 0;
-  var i, j, k, rule, word, forms;
-
-  function matches(keyword) {
-    if (config.match === 'suffix' && keyword.length >= 3 && keyword.indexOf(' ') < 0) {
-      for (var w = 0; w < words.length; w++) {
-        if (endsWith(words[w], keyword)) { return true; }
+  var i, j, entry;
+  for (i = 0; i < keywords.length; i++) {
+    entry = keywords[i];
+    if (entry.suffix) {
+      for (j = 0; j < words.length; j++) {
+        if (endsWith(words[j], entry.word)) { return entry.category; }
       }
-      return false;
-    }
-    forms = variants(keyword, language);
-    for (k = 0; k < forms.length; k++) {
-      if (padded.indexOf(' ' + forms[k] + ' ') >= 0) { return true; }
-    }
-    return false;
-  }
-
-  for (i = 0; i < config.rules.length; i++) {
-    rule = config.rules[i];
-    for (j = 0; j < rule.words.length; j++) {
-      word = rule.words[j];
-      if (word.length > bestLength && matches(word)) {
-        best = rule.category;
-        bestLength = word.length;
+    } else {
+      for (j = 0; j < entry.forms.length; j++) {
+        if (padded.indexOf(entry.forms[j]) >= 0) { return entry.category; }
       }
     }
   }
-  return best;
+  return CATEGORY_DEFAULT;
 }
 
 module.exports = {
