@@ -12,6 +12,17 @@ typedef enum {
   ACTION_SYNC_START     = 7, // phone -> watch: a fresh item stream is starting, discard the old one
 } BringAction;
 
+// Must match the ERR_* values in src/pkjs/index.js
+typedef enum {
+  ERR_NONE           = 0,
+  ERR_CONNECT_BRING  = 1, // could not authenticate with Bring!
+  ERR_READ_LIST      = 2, // could not read the list
+  ERR_LOGIN          = 3, // login failed while saving the configuration
+  ERR_NO_LISTS       = 4, // the account has no lists
+  ERR_LIST_NOT_FOUND = 5, // errorMsg holds the requested list name
+  ERR_PHONE          = 6, // watch-local: the phone never answered
+} BringError;
+
 #define MAX_ITEMS 80
 #define MAX_NAME_LEN 48
 #define DICTATION_BUFFER_SIZE 128
@@ -63,6 +74,129 @@ static int s_retry_count = 0;
 static void update_ui(void);
 
 // ---------------------------------------------------------------------------
+// Localization
+//
+// All user-visible text lives in one table per language. The language is
+// picked from the watch's system language (i18n_get_system_locale()), and
+// falls back to English. The phone side sends error *codes* (not text) so
+// they are shown in the watch's language too.
+// ---------------------------------------------------------------------------
+
+typedef struct {
+  const char *lang;            // two-letter language code
+  const char *add_item;
+  const char *add_item_hint;
+  const char *list_header;
+  const char *loading;
+  const char *not_configured;
+  const char *err_phone;
+  const char *err_generic;
+  const char *err_connect;
+  const char *err_read;
+  const char *err_login;
+  const char *err_no_lists;
+  const char *err_list_not_found; // contains one %s for the list name
+} Strings;
+
+static const Strings STRINGS[] = {
+  { "en", "+ Add item", "Voice dictation", "Shopping list",
+    "Syncing with Bring!...",
+    "Set up your Bring! account.\n\nOn your phone: Pebble app > this app > Settings.",
+    "Could not reach the phone.\n\nMake sure the Pebble app is open and Bluetooth is connected.",
+    "A sync error occurred.",
+    "Could not connect to Bring!: check your settings.",
+    "Error reading the Bring! list.",
+    "Could not log in to Bring!. Check your email and password in Settings.",
+    "Your Bring! account has no lists.",
+    "No list named \"%s\" was found. Check the name in Settings." },
+  { "es", s_strings->add_item, s_strings->add_item_hint, "Lista de compras",
+    "Sincronizando con Bring!...",
+    "Configura tu cuenta de Bring!\n\nEn el teléfono: app Pebble > esta app > Configuración.",
+    "No se pudo conectar con el teléfono.\n\nRevisa que la app Pebble esté abierta y Bluetooth conectado.",
+    "Ocurrió un error al sincronizar.",
+    "No se pudo conectar con Bring!: revisa tu configuración.",
+    "Error al leer la lista de Bring!",
+    "No se pudo iniciar sesión en Bring!. Revisa tu email y contraseña desde Configuración.",
+    "Tu cuenta de Bring! no tiene listas.",
+    "No se encontró una lista llamada \"%s\". Revisa el nombre desde Configuración." },
+  { "de", "+ Artikel hinzufügen", "Spracheingabe", "Einkaufsliste",
+    "Synchronisiere mit Bring!...",
+    "Richte dein Bring!-Konto ein.\n\nAuf dem Handy: Pebble-App > diese App > Einstellungen.",
+    "Keine Verbindung zum Handy.\n\nPrüfe, ob die Pebble-App geöffnet und Bluetooth verbunden ist.",
+    "Beim Synchronisieren ist ein Fehler aufgetreten.",
+    "Keine Verbindung zu Bring!: Prüfe deine Einstellungen.",
+    "Fehler beim Lesen der Bring!-Liste.",
+    "Anmeldung bei Bring! fehlgeschlagen. Prüfe E-Mail und Passwort in den Einstellungen.",
+    "Dein Bring!-Konto hat keine Listen.",
+    "Keine Liste namens \"%s\" gefunden. Prüfe den Namen in den Einstellungen." },
+  { "fr", "+ Ajouter un article", "Dictée vocale", "Liste de courses",
+    "Synchronisation avec Bring!...",
+    "Configurez votre compte Bring!\n\nSur le téléphone : appli Pebble > cette appli > Paramètres.",
+    "Impossible de joindre le téléphone.\n\nVérifiez que l'appli Pebble est ouverte et le Bluetooth connecté.",
+    "Une erreur de synchronisation s'est produite.",
+    "Connexion à Bring! impossible : vérifiez vos paramètres.",
+    "Erreur de lecture de la liste Bring!.",
+    "Connexion à Bring! impossible. Vérifiez votre e-mail et mot de passe dans les Paramètres.",
+    "Votre compte Bring! n'a aucune liste.",
+    "Aucune liste nommée \"%s\". Vérifiez le nom dans les Paramètres." },
+  { "it", "+ Aggiungi articolo", "Dettatura vocale", "Lista della spesa",
+    "Sincronizzazione con Bring!...",
+    "Configura il tuo account Bring!\n\nSul telefono: app Pebble > questa app > Impostazioni.",
+    "Impossibile contattare il telefono.\n\nVerifica che l'app Pebble sia aperta e il Bluetooth connesso.",
+    "Si è verificato un errore di sincronizzazione.",
+    "Impossibile connettersi a Bring!: controlla le impostazioni.",
+    "Errore nella lettura della lista di Bring!.",
+    "Accesso a Bring! non riuscito. Controlla email e password nelle Impostazioni.",
+    "Il tuo account Bring! non ha liste.",
+    "Nessuna lista chiamata \"%s\". Controlla il nome nelle Impostazioni." },
+  { "pt", "+ Adicionar item", "Ditado por voz", "Lista de compras",
+    "Sincronizando com o Bring!...",
+    "Configure sua conta do Bring!\n\nNo telefone: app Pebble > este app > Configurações.",
+    "Não foi possível conectar ao telefone.\n\nVerifique se o app Pebble está aberto e o Bluetooth conectado.",
+    "Ocorreu um erro ao sincronizar.",
+    "Não foi possível conectar ao Bring!: verifique suas configurações.",
+    "Erro ao ler a lista do Bring!.",
+    "Não foi possível entrar no Bring!. Verifique seu e-mail e senha em Configurações.",
+    "Sua conta do Bring! não tem listas.",
+    "Nenhuma lista chamada \"%s\". Verifique o nome em Configurações." },
+};
+#define STRINGS_COUNT ((int)(sizeof(STRINGS) / sizeof(STRINGS[0])))
+
+static const Strings *s_strings = &STRINGS[0]; // English until detected
+
+static void detect_language(void) {
+  const char *locale = i18n_get_system_locale(); // e.g. "de_DE"
+  s_strings = &STRINGS[0];
+  if (!locale) {
+    return;
+  }
+  for (int i = 0; i < STRINGS_COUNT; i++) {
+    if (strncmp(locale, STRINGS[i].lang, 2) == 0) {
+      s_strings = &STRINGS[i];
+      return;
+    }
+  }
+}
+
+static void set_error_message(BringError code, const char *detail) {
+  const char *text = s_strings->err_generic;
+  switch (code) {
+    case ERR_CONNECT_BRING: text = s_strings->err_connect; break;
+    case ERR_READ_LIST:     text = s_strings->err_read; break;
+    case ERR_LOGIN:         text = s_strings->err_login; break;
+    case ERR_NO_LISTS:      text = s_strings->err_no_lists; break;
+    case ERR_PHONE:         text = s_strings->err_phone; break;
+    case ERR_LIST_NOT_FOUND:
+      snprintf(s_message_text, sizeof(s_message_text), s_strings->err_list_not_found, detail ? detail : "");
+      return;
+    default: break;
+  }
+  strncpy(s_message_text, text, sizeof(s_message_text) - 1);
+  s_message_text[sizeof(s_message_text) - 1] = '\0';
+}
+
+
+// ---------------------------------------------------------------------------
 // AppMessage: outgoing
 //
 // The phone-side JS may not be attached yet when the watch app starts (e.g.
@@ -77,6 +211,11 @@ static void send_request_sync_message(void) {
     return;
   }
   dict_write_int32(iter, MESSAGE_KEY_action, ACTION_REQUEST_SYNC);
+  // Lets the phone show its configuration page in the watch's language.
+  const char *locale = i18n_get_system_locale();
+  if (locale) {
+    dict_write_cstring(iter, MESSAGE_KEY_locale, locale);
+  }
   app_message_outbox_send();
 }
 
@@ -88,10 +227,7 @@ static void retry_timer_callback(void *data) {
   s_retry_count++;
   if (s_retry_count > MAX_SYNC_RETRIES) {
     s_state = STATE_ERROR;
-    strncpy(s_message_text,
-            "No se pudo conectar con el telefono.\n\nRevisa que la app Pebble este abierta y Bluetooth conectado.",
-            sizeof(s_message_text) - 1);
-    s_message_text[sizeof(s_message_text) - 1] = '\0';
+    set_error_message(ERR_PHONE, NULL);
     update_ui();
     return;
   }
@@ -147,10 +283,10 @@ static void show_message(const char *text) {
 static void update_ui(void) {
   switch (s_state) {
     case STATE_LOADING:
-      show_message("Sincronizando con Bring!...");
+      show_message(s_strings->loading);
       break;
     case STATE_NOT_CONFIGURED:
-      show_message("Configura tu cuenta de Bring!\n\nEn el telefono: app Pebble > esta app > Configuracion.");
+      show_message(s_strings->not_configured);
       break;
     case STATE_ERROR:
       show_message(s_message_text);
@@ -178,7 +314,7 @@ static void dictation_session_callback(DictationSession *session, DictationSessi
 // ---------------------------------------------------------------------------
 // MenuLayer callbacks
 //
-// Section 0 has a single "+ Agregar item" row. Section 1 lists the current
+// Section 0 has a single "+ Add item" row. Section 1 lists the current
 // Bring! items, prefixed with [ ] / [x] to show purchased state.
 // ---------------------------------------------------------------------------
 
@@ -200,13 +336,13 @@ static int16_t menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t s
 static void menu_draw_header_callback(GContext *ctx, const Layer *cell_layer, uint16_t section_index,
                                        void *context) {
   if (section_index == 1) {
-    menu_cell_basic_header_draw(ctx, cell_layer, "Lista de compras");
+    menu_cell_basic_header_draw(ctx, cell_layer, s_strings->list_header);
   }
 }
 
 static void menu_draw_row_callback(GContext *ctx, const Layer *cell_layer, MenuIndex *cell_index, void *context) {
   if (cell_index->section == 0) {
-    menu_cell_basic_draw(ctx, cell_layer, "+ Agregar item", "Dictado por voz", s_add_icon);
+    menu_cell_basic_draw(ctx, cell_layer, s_strings->add_item, s_strings->add_item_hint, s_add_icon);
     return;
   }
 
@@ -282,14 +418,11 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
       update_ui();
       break;
     case ACTION_ERROR: {
+      Tuple *code_t = dict_find(iterator, MESSAGE_KEY_errorCode);
       Tuple *msg_t = dict_find(iterator, MESSAGE_KEY_errorMsg);
       s_state = STATE_ERROR;
-      if (msg_t) {
-        strncpy(s_message_text, msg_t->value->cstring, sizeof(s_message_text) - 1);
-        s_message_text[sizeof(s_message_text) - 1] = '\0';
-      } else {
-        strncpy(s_message_text, "Ocurrio un error al sincronizar.", sizeof(s_message_text) - 1);
-      }
+      set_error_message(code_t ? (BringError)code_t->value->int32 : ERR_NONE,
+                        msg_t ? msg_t->value->cstring : NULL);
       update_ui();
       break;
     }
@@ -376,6 +509,7 @@ static void window_unload(Window *window) {
 }
 
 static void init(void) {
+  detect_language();
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = window_load,

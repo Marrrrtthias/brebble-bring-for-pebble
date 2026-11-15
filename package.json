@@ -31,7 +31,9 @@
       "itemName",
       "itemDone",
       "itemIcon",
-      "errorMsg"
+      "errorMsg",
+      "errorCode",
+      "locale"
     ],
     "resources": {
       "media": [

@@ -1,79 +1,98 @@
-# Bring! para Pebble
+# Bring! for Pebble
 
-Watchapp para Pebble (incluye el hardware 2026 de Core Devices: Pebble Time 2
-"emery", Pebble Round 2 "gabbro" y Pebble 2 Duo "flint") que sincroniza con tu
-lista de compras de [Bring!](https://www.getbring.com/).
+A Pebble watchapp (including the 2026 Core Devices hardware: Pebble Time 2
+"emery", Pebble Round 2 "gabbro" and Pebble 2 Duo "flint") that syncs with
+your [Bring!](https://www.getbring.com/) shopping list.
 
-Bring! no tiene una API pública oficial. Esta app usa la API REST no oficial
-que la comunidad reverse-engineered (la misma que usa la integración de
-[Home Assistant](https://www.home-assistant.io/integrations/bring/), vía
-[miaucl/bring-api](https://github.com/miaucl/bring-api)). Puede dejar de
-funcionar si Bring! cambia su backend.
+Bring! has no official public API. This app uses the unofficial REST API
+reverse-engineered by the community (the same one used by the
+[Home Assistant](https://www.home-assistant.io/integrations/bring/)
+integration, via [miaucl/bring-api](https://github.com/miaucl/bring-api)).
+It may stop working if Bring! changes its backend.
 
-## Cómo funciona
+## Languages
 
-- **`src/c/bring_pebble.c`**: la UI del reloj. Un `MenuLayer` con "+ Agregar
-  item" arriba (dictado por voz) y la lista debajo (`[ ]`/`[x]` según si ya
-  se compró). Tocar un item lo marca/desmarca.
-- **`src/pkjs/`**: el puente en el teléfono (PebbleKit JS). El reloj *nunca*
-  habla directo con Bring!, solo intercambia mensajes cortos (`AppMessage`)
-  con el teléfono, que es quien hace las llamadas HTTPS a `api.getbring.com`.
-  - `bring-api.js`: cliente de la API de Bring! (login, refresh de token,
-    leer lista, agregar/completar/reactivar items).
-  - `config.js`: genera la pantalla de configuración (login + selección de
-    lista) que se abre en el navegador del teléfono.
-  - `index.js`: conecta todo — responde a los mensajes del reloj y a los
-    eventos de configuración.
+The app follows the language set on the watch. Supported: English (default and
+fallback), Spanish, German, French, Italian and Portuguese.
 
-## Configurar tu cuenta
+- The watch UI, including error messages, is localized in
+  `src/c/bring_pebble.c` (the `STRINGS` table). The language is read with
+  `i18n_get_system_locale()`.
+- The phone never sends error text, only error codes, so errors also appear in
+  the watch's language.
+- The configuration page uses the watch's language (sent with each sync
+  request), falling back to the phone's language, then English.
+- Catalog items are translated to the Bring! account's language (see below).
 
-1. Instalá la app en el reloj (ver abajo).
-2. En el teléfono, abrí la app Pebble → esta app → **Configuración**.
-3. Ingresá tu email y contraseña de Bring!, elegí la lista, y guardá.
-4. El reloj sincroniza automáticamente apenas se guarda la configuración.
+To add a language, add an entry to `STRINGS` in `src/c/bring_pebble.c` and to
+`TEXTS` in `src/pkjs/config.js`, and optionally keywords to
+`src/pkjs/categorize.js`.
 
-El email/contraseña se guardan solo en el `localStorage` de la app Pebble en
-ese teléfono (no se envían nunca al reloj). Se usa la contraseña para volver
-a loguear si el refresh token expira; si eso te preocupa, es fácil cambiar
-`bring-api.js` para no persistirla y simplemente re-pedir el login cuando el
-refresh falle.
+## How it works
 
-## Compilar e instalar
+- **`src/c/bring_pebble.c`**: the watch UI. A `MenuLayer` with "+ Add item" at
+  the top (voice dictation) and the list below (`[ ]`/`[x]` depending on
+  whether it was bought). Selecting an item toggles it.
+- **`src/pkjs/`**: the phone bridge (PebbleKit JS). The watch *never* talks to
+  Bring! directly; it only exchanges short `AppMessage`s with the phone, which
+  makes the HTTPS calls to `api.getbring.com`.
+  - `bring-api.js`: Bring! API client (login, token refresh, read list,
+    add/complete/restore items).
+  - `config.js`: builds the configuration screen (login + list selection)
+    that opens in the phone's browser.
+  - `categorize.js`: keyword-based icon category guess for list items.
+  - `index.js`: ties everything together, handling watch messages and
+    configuration events.
+
+## Setting up your account
+
+1. Install the app on the watch (see below).
+2. On the phone, open the Pebble app → this app → **Settings**.
+3. Enter your Bring! email and password, optionally a list name, and save.
+4. The watch syncs automatically as soon as the settings are saved.
+
+The email and password are stored only in the Pebble app's `localStorage` on
+that phone (they are never sent to the watch). The password is used to log in
+again when the refresh token expires; if that concerns you, it is easy to
+change `bring-api.js` to not persist it and ask for the login again when the
+refresh fails.
+
+## Build and install
 
 ```sh
-pebble build                          # compila las 7 plataformas
-pebble install --emulator emery       # probar en el emulador (Pebble Time 2)
-pebble install --phone <ip>           # instalar en un reloj real emparejado
+pebble build                          # builds all 7 platforms
+pebble install --emulator emery       # try it in the emulator (Pebble Time 2)
+pebble install --phone <ip>           # install on a paired, real watch
 ```
 
-## Limitaciones conocidas
+## Known limitations
 
-- **Pantallas redondas (chalk / gabbro)**: el título de sección "Lista de
-  compras" queda recortado contra el borde curvo de la pantalla (se corta
-  la "L" inicial). Es un detalle de layout del `MenuLayer` pendiente de
-  ajustar; el resto de la app funciona igual.
-- **Sin edición de texto en el reloj**: agregar items usa dictado por voz
-  (`dictation_session`). En hardware sin micrófono (aplite/basalt/chalk/
-  diorite) esa opción no va a funcionar; el reloj sigue mostrando y
-  sincronizando la lista igual.
-- **Reintentos de sincronización**: si el teléfono tarda en reconectar
-  Bluetooth, el reloj reintenta el pedido de sync cada 4s hasta 6 veces antes
-  de mostrar un error.
-- **Traducción de items de catálogo**: los items elegidos del catálogo de
-  Bring! (no los escritos a mano) se guardan en el backend bajo un nombre
-  canónico en alemán y se traducen automáticamente al idioma de la cuenta
-  usando el diccionario público de locale de Bring!. Cubre los idiomas más
-  comunes (`es-ES`, `en-US`, `fr-FR`, etc. — ver `BRING_SUPPORTED_LOCALES`
-  en `bring-api.js`); una variante regional muy específica no listada ahí
-  podría no traducirse.
+- **Round screens (chalk / gabbro)**: the "Shopping list" section title is
+  clipped against the curved edge of the screen. This is a `MenuLayer` layout
+  detail that still needs adjusting; the rest of the app works normally.
+- **No text editing on the watch**: adding items uses voice dictation
+  (`dictation_session`). On hardware without a microphone (aplite/basalt/
+  chalk/diorite) this option will not work; the watch still shows and syncs
+  the list.
+- **Sync retries**: if the phone is slow to reconnect over Bluetooth, the
+  watch retries the sync request every 4s, up to 6 times, before showing an
+  error.
+- **Catalog item translation**: items picked from the Bring! catalog (as
+  opposed to typed by hand) are stored on the backend under a canonical German
+  name and automatically translated to the account's language using Bring!'s
+  public locale dictionary. This covers the most common languages (`es-ES`,
+  `en-US`, `fr-FR`, etc.; see `BRING_SUPPORTED_LOCALES` in `bring-api.js`); a
+  very specific regional variant not listed there may not be translated.
+- **Item icons**: category icons are guessed from keywords in six languages;
+  unrecognized names get a default icon.
 
-## Probado
+## Tested
 
-- `pebble build` compila sin errores en las 7 plataformas.
-- El round-trip de `AppMessage` (reloj ⇄ pkjs) se probó en el emulador
-  `emery`: el reloj pide sync, el teléfono responde y el reloj muestra el
-  estado "no configurado" correctamente.
-- El flujo completo de login/lista de Bring! se probó contra la API real
-  con una cuenta real: login, sincronización automática al abrir la app,
-  agregar/marcar/desmarcar items (a mano y por voz) y traducción de items
-  de catálogo, todo confirmado funcionando de punta a punta.
+- `pebble build` compiled without errors on all 7 platforms (before the
+  localization work; rebuild to verify).
+- The `AppMessage` round trip (watch ⇄ pkjs) was tested in the `emery`
+  emulator: the watch requests a sync, the phone answers, and the watch shows
+  the "not configured" state correctly.
+- The full Bring! login/list flow was tested against the real API with a real
+  account: login, automatic sync on app start, adding/checking/unchecking items
+  (by hand and by voice) and catalog item translation all worked end to end.
