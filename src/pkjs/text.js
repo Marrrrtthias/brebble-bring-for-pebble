@@ -10,6 +10,17 @@ function truncateText(text, max) {
   return text.substring(0, end) + '…';
 }
 
+// Removes sentence punctuation (and surrounding whitespace) that voice
+// dictation appends to the end of the text, e.g. "Milk." -> "Milk". Only
+// trailing punctuation is touched; characters inside the text, and closing
+// brackets or symbols such as "%", are kept.
+var TRAILING_PUNCTUATION = /[\s.,;:!?\u2026\u3001\u3002\uFF01\uFF0C\uFF1A\uFF1B\uFF1F\u00A1\u00BF]+$/;
+
+function stripTrailingPunctuation(text) {
+  return String(text).replace(TRAILING_PUNCTUATION, '');
+}
+
 module.exports = {
-  truncateText: truncateText
+  truncateText: truncateText,
+  stripTrailingPunctuation: stripTrailingPunctuation
 };
