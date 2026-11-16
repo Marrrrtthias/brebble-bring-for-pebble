@@ -94,7 +94,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the tests and builds the
 ## Releases
 
 Built `.pbw` files are attached to each
-[GitHub release](https://github.com/Marrrrtthias/bring_pebble/releases). A
+[GitHub release](https://github.com/Marrrrtthias/brebble-bring-for-pebble/releases). A
 release is created automatically when a `v*` tag is pushed (see
 `.github/workflows/release.yml`). The app is also being published on the Rebble app
 store.
