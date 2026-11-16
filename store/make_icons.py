@@ -30,9 +30,10 @@ def draw():
     img = Image.new("RGBA", (N, N), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
-    # Handles (behind the bag): two rope loops.
-    d.arc(box(46, 8, 78, 52), 180, 360, fill=HANDLE, width=5 * S)
-    d.arc(box(66, 8, 98, 52), 180, 360, fill=HANDLE, width=5 * S)
+    # Handles (behind the bag): two rope loops. Full ellipses whose lower
+    # halves are hidden by the bag body, so they always meet the bag.
+    d.ellipse(box(46, 10, 78, 70), outline=HANDLE, width=5 * S)
+    d.ellipse(box(66, 10, 98, 70), outline=HANDLE, width=5 * S)
 
     # Bag body.
     body = [p(24, 44), p(120, 44), p(124, 132), p(20, 132)]
