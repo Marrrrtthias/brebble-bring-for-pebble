@@ -18,11 +18,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 PLATFORMS=("$@")
 if [ ${#PLATFORMS[@]} -eq 0 ]; then
-  # aplite is left out: in the emulator its app never gets an answer from the
-  # phone side (the watch reports "Could not reach the phone"), so there is
-  # nothing useful to capture. Pass it explicitly to try again. It is a 144x168
-  # black-and-white screen like diorite and flint.
-  PLATFORMS=(basalt chalk diorite emery flint gabbro)
+  PLATFORMS=(aplite basalt chalk diorite emery flint gabbro)
 fi
 
 # Emulator platform -> watch name used in the file names.
