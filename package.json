@@ -1,7 +1,7 @@
 {
-  "name": "bring_pebble",
-  "author": "MakeAwesomeHappen",
-  "version": "1.1.0",
+  "name": "brebble",
+  "author": "Matthias Gellrich",
+  "version": "2.0.0",
   "keywords": ["pebble-app"],
   "private": true,
   "scripts": {
@@ -11,8 +11,8 @@
   },
   "dependencies": {},
   "pebble": {
-    "displayName": "Bring!",
-    "uuid": "15234f21-7a9c-45cb-946d-5d2c1cad64b2",
+    "displayName": "Brebble! Bring for pebble",
+    "uuid": "5a197acd-4c8b-4188-a39b-3bea717f1d64",
     "sdkVersion": "3",
     "enableMultiJS": true,
     "targetPlatforms": [

@@ -1,4 +1,12 @@
-# Bring! for Pebble
+# Brebble! Bring for pebble
+
+> **Unofficial.** Brebble is not affiliated with, endorsed by or sponsored by
+> Bring! Labs AG. "Bring!" is a trademark of its respective owner and is used
+> here only to describe which service this app works with.
+
+> **Fork.** This is a fork of
+> [aiorass/bring_pebble](https://github.com/aiorass/bring_pebble), which seems to be no
+> longer maintained. See [Credits](#credits-and-license).
 
 A Pebble watchapp (including the 2026 Core Devices hardware: Pebble Time 2
 "emery", Pebble Round 2 "gabbro" and Pebble 2 Duo "flint") that syncs with
@@ -83,6 +91,17 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the tests and builds the
 `.pbw` for all platforms on every pull request and push to `main`; the built
 `.pbw` is attached to the run as an artifact (the file itself, not a zip).
 
+## Releases
+
+Built `.pbw` files are attached to each
+[GitHub release](https://github.com/Marrrrtthias/bring_pebble/releases). A
+release is created automatically when a `v*` tag is pushed (see
+`.github/workflows/release.yml`). The app is also being published on the Rebble app
+store.
+
+Version 2.0.0 uses a new app UUID, so it installs next to the original app
+instead of replacing it, and the settings must be entered again.
+
 ## Known limitations
 
 - **Round screens (chalk / gabbro)**: the "Shopping list" section title is
@@ -124,3 +143,12 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the tests and builds the
 - The full Bring! login/list flow was tested against the real API with a real
   account: login, automatic sync on app start, adding/checking/unchecking items
   (by hand and by voice) and catalog item translation all worked end to end.
+
+## Credits and license
+
+Brebble is a fork of [aiorass/bring_pebble](https://github.com/aiorass/bring_pebble)
+(c) 2026 aiorass, with changes (c) 2026 Matthias Gellrich. Both parts are
+released under the [MIT License](LICENSE).
+
+The Bring! API client builds on the community work in
+[miaucl/bring-api](https://github.com/miaucl/bring-api).
