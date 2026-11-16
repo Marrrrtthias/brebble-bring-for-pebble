@@ -96,8 +96,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the tests and builds the
 Built `.pbw` files are attached to each
 [GitHub release](https://github.com/Marrrrtthias/brebble-bring-for-pebble/releases). A
 release is created automatically when a `v*` tag is pushed (see
-`.github/workflows/release.yml`). The app is also being published on the Rebble app
-store.
+`.github/workflows/release.yml`). The app is also on the
+[Rebble app store](https://apps.repebble.com/5403660269af4a0087f0cf95).
 
 Version 2.0.0 uses a new app UUID, so it installs next to the original app
 instead of replacing it, and the settings must be entered again.
