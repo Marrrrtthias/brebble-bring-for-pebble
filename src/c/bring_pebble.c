@@ -452,7 +452,22 @@ static void init(void) {
   app_message_register_inbox_received(inbox_received_callback);
   app_message_register_inbox_dropped(inbox_dropped_callback);
   app_message_register_outbox_failed(outbox_failed_callback);
-  app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
+  // The maximum buffer sizes (about 8 KB each) do not fit in aplite's RAM:
+  // app_message_open() then fails and the app can never talk to the phone.
+  // Every message is small (names are capped at MAX_NAME_LEN, dictation text
+  // at DICTATION_BUFFER_SIZE, error text at about 150 bytes), so aplite gets
+  // right-sized buffers; the other platforms keep the maximum.
+#if defined(PBL_PLATFORM_APLITE)
+  const uint32_t inbox_size = 512;
+  const uint32_t outbox_size = 256;
+#else
+  const uint32_t inbox_size = app_message_inbox_size_maximum();
+  const uint32_t outbox_size = app_message_outbox_size_maximum();
+#endif
+  AppMessageResult open_result = app_message_open(inbox_size, outbox_size);
+  if (open_result != APP_MSG_OK) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "app_message_open failed: %d", (int)open_result);
+  }
 
   window_stack_push(s_window, true);
 }
