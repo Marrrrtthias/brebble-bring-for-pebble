@@ -4,8 +4,8 @@
 > Bring! Labs AG. "Bring!" is a trademark of its respective owner and is used
 > here only to describe which service this app works with.
 
-> **Fork.** This is a maintained fork of
-> [aiorass/bring_pebble](https://github.com/aiorass/bring_pebble), which is no
+> **Fork.** This is a fork of
+> [aiorass/bring_pebble](https://github.com/aiorass/bring_pebble), which seems to be no
 > longer maintained. See [Credits](#credits-and-license).
 
 A Pebble watchapp (including the 2026 Core Devices hardware: Pebble Time 2
