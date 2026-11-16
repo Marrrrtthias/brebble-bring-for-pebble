@@ -9,8 +9,9 @@
 #   (pebble sdk install 4.44).
 #
 # Usage: store/screenshots/take_screenshots.sh [platform ...]
-# Output: store/screenshots/<platform>_1.png (top of the list)
-#         store/screenshots/<platform>_2.png (scrolled down)
+# Output: store/screenshots/<watch>_1.png (top of the list)
+#         store/screenshots/<watch>_2.png (scrolled down)
+# where <watch> is the product name, e.g. emery -> pebble-time-2.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -23,6 +24,20 @@ if [ ${#PLATFORMS[@]} -eq 0 ]; then
   # black-and-white screen like diorite and flint.
   PLATFORMS=(basalt chalk diorite emery flint gabbro)
 fi
+
+# Emulator platform -> watch name used in the file names.
+watch_name() {
+  case "$1" in
+    aplite)  echo pebble-classic ;;
+    basalt)  echo pebble-time ;;
+    chalk)   echo pebble-time-round ;;
+    diorite) echo pebble-2 ;;
+    emery)   echo pebble-time-2 ;;
+    flint)   echo pebble-2-duo ;;
+    gabbro)  echo pebble-round-2 ;;
+    *)       echo "$1" ;;
+  esac
+}
 
 WORK="$(mktemp -d)"
 trap 'pebble kill >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
@@ -40,7 +55,7 @@ for platform in "${PLATFORMS[@]}"; do
   (cd "$WORK/app" && pebble install --emulator "$platform" "$PBW")
   # Give the app time to launch and sync with the mock phone (aplite is slow).
   sleep 15
-  shot() { (cd "$WORK/app" && pebble screenshot --emulator "$platform" --no-open "$HERE/${platform}_$1.png"); }
+  shot() { (cd "$WORK/app" && pebble screenshot --emulator "$platform" --no-open "$HERE/$(watch_name "$platform")_$1.png"); }
   shot 1
   (cd "$WORK/app" && pebble emu-button --emulator "$platform" click down --repeat 4 --interval 300)
   sleep 2
