@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Takes the Rebble store screenshots for every platform in the Pebble emulator.
+#
+# The app is built from a temporary copy of the repo in which the Bring! API
+# client is replaced by an offline mock with a demo list (mock-bring-api.js),
+# so no account is needed and the repository itself is never modified.
+#
+# Requirements: pebble-tool with the SDK from the CI workflow installed
+#   (pebble sdk install 4.44).
+#
+# Usage: store/screenshots/take_screenshots.sh [platform ...]
+# Output: store/screenshots/<platform>_1.png (top of the list)
+#         store/screenshots/<platform>_2.png (scrolled down)
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"
+PLATFORMS=("$@")
+if [ ${#PLATFORMS[@]} -eq 0 ]; then
+  # aplite is left out: in the emulator its app never gets an answer from the
+  # phone side (the watch reports "Could not reach the phone"), so there is
+  # nothing useful to capture. Pass it explicitly to try again. It is a 144x168
+  # black-and-white screen like diorite and flint.
+  PLATFORMS=(basalt chalk diorite emery flint gabbro)
+fi
+
+WORK="$(mktemp -d)"
+trap 'pebble kill >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
+
+# Build a copy with the mock API client.
+mkdir "$WORK/app"
+(cd "$REPO" && tar --exclude=./.git --exclude=./build --exclude=./node_modules --exclude=./store -cf - .) | tar -xf - -C "$WORK/app"
+cp "$HERE/mock-bring-api.js" "$WORK/app/src/pkjs/bring-api.js"
+(cd "$WORK/app" && pebble build)
+PBW="$(ls "$WORK"/app/build/*.pbw)"
+
+for platform in "${PLATFORMS[@]}"; do
+  echo "== $platform"
+  pebble kill >/dev/null 2>&1 || true
+  (cd "$WORK/app" && pebble install --emulator "$platform" "$PBW")
+  # Give the app time to launch and sync with the mock phone (aplite is slow).
+  sleep 15
+  shot() { (cd "$WORK/app" && pebble screenshot --emulator "$platform" --no-open "$HERE/${platform}_$1.png"); }
+  shot 1
+  (cd "$WORK/app" && pebble emu-button --emulator "$platform" click down --repeat 4 --interval 300)
+  sleep 2
+  shot 2
+done
+echo "Screenshots written to $HERE"
