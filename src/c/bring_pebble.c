@@ -247,9 +247,35 @@ static void dictation_session_callback(DictationSession *session, DictationSessi
 // ---------------------------------------------------------------------------
 // MenuLayer callbacks
 //
-// Section 0 has a single "+ Add item" row. Section 1 lists the current
-// Bring! items, prefixed with [ ] / [x] to show purchased state.
+// Section 0 has a single "+ Add item" row, drawn by the system. Section 1
+// lists the current Bring! items as compact one-line rows (icon + name);
+// purchased items are greyed out and struck through. On round watches the
+// focused item row is a bit taller than the others (the MenuLayer only lays
+// out a taller selected row correctly in its center-focused mode, which is the
+// default on round and not used on rectangular watches).
 // ---------------------------------------------------------------------------
+
+// The system's default cell height for apps, kept for the "+ Add item" row.
+// Time 2 and Round 2 use the firmware's "large" menu style, the others "medium".
+#if PBL_DISPLAY_HEIGHT >= 200
+#define ADD_ROW_HEIGHT 61
+#define ROW_INSET 10    // left inset of the system menu cells
+#define ICON_TEXT_GAP 9 // gap between icon and title in the system menu cells
+#else
+#define ADD_ROW_HEIGHT 44
+#define ROW_INSET 5
+#define ICON_TEXT_GAP 5
+#endif
+
+#define ITEM_ROW_HEIGHT PBL_IF_ROUND_ELSE(34, 32)
+#define ITEM_ROW_FOCUSED_HEIGHT PBL_IF_ROUND_ELSE(46, ITEM_ROW_HEIGHT)
+
+static int16_t menu_get_cell_height_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *context) {
+  if (cell_index->section == 0) {
+    return ADD_ROW_HEIGHT;
+  }
+  return menu_layer_is_index_selected(menu_layer, cell_index) ? ITEM_ROW_FOCUSED_HEIGHT : ITEM_ROW_HEIGHT;
+}
 
 static uint16_t menu_get_num_sections_callback(MenuLayer *menu_layer, void *context) {
   return 2;
@@ -269,7 +295,54 @@ static int16_t menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t s
 static void menu_draw_header_callback(GContext *ctx, const Layer *cell_layer, uint16_t section_index,
                                        void *context) {
   if (section_index == 1) {
+#if PBL_ROUND
+    // The system header is left-aligned, which the round bezel clips; centre it instead
+    // (same font and nudge as menu_cell_basic_header_draw).
+    GRect box = layer_get_bounds(cell_layer);
+    box.origin.y -= 1;
+    graphics_draw_text(ctx, s_strings->list_header, fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD), box,
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+#else
     menu_cell_basic_header_draw(ctx, cell_layer, s_strings->list_header);
+#endif
+  }
+}
+
+// One-line item row: icon + name, left-aligned like the system cells on
+// rectangular watches, centred as a group on round ones.
+static void draw_item_row(GContext *ctx, const Layer *cell_layer, const BringItem *item) {
+  GRect bounds = layer_get_bounds(cell_layer);
+  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD); // the system menu cell title font
+  GBitmap *icon = (item->icon < ICON_CATEGORY_COUNT) ? s_category_icons[item->icon] : NULL;
+  GSize icon_size = icon ? gbitmap_get_bounds(icon).size : GSize(0, 0);
+  int16_t text_offset = icon ? icon_size.w + ICON_TEXT_GAP : 0;
+
+  // On round, rows above and below the centre are narrower, so leave more room at the sides.
+  int16_t max_text_w = PBL_IF_ROUND_ELSE(bounds.size.w * 4 / 5, bounds.size.w - 2 * ROW_INSET) - text_offset;
+  GSize text_size = graphics_text_layout_get_content_size(item->name, font, GRect(0, 0, max_text_w, 30),
+                                                          GTextOverflowModeTrailingEllipsis,
+                                                          GTextAlignmentLeft);
+  int16_t x = PBL_IF_ROUND_ELSE((bounds.size.w - text_offset - text_size.w) / 2, ROW_INSET);
+
+  if (icon) {
+    graphics_context_set_compositing_mode(ctx, GCompOpSet); // as the system menu cells do
+    graphics_draw_bitmap_in_rect(ctx, icon, GRect(x, (bounds.size.h - icon_size.h) / 2, icon_size.w, icon_size.h));
+  }
+
+  if (item->done) {
+    GColor grey = menu_cell_layer_is_highlighted(cell_layer) ? PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite)
+                                                             : PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack);
+    graphics_context_set_text_color(ctx, grey);
+    graphics_context_set_stroke_color(ctx, grey);
+  }
+
+  // Gothic 24 leaves space above its glyphs; shift the box up so the text is centred.
+  GRect text_box = GRect(x + text_offset, (bounds.size.h - 24) / 2 - 4, text_size.w, 30);
+  graphics_draw_text(ctx, item->name, font, text_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
+  if (item->done) {
+    int16_t y = bounds.size.h / 2 + 1;
+    graphics_draw_line(ctx, GPoint(text_box.origin.x, y), GPoint(text_box.origin.x + text_size.w, y));
   }
 }
 
@@ -279,11 +352,7 @@ static void menu_draw_row_callback(GContext *ctx, const Layer *cell_layer, MenuI
     return;
   }
 
-  static char s_row_buffer[MAX_NAME_LEN + 4];
-  BringItem *item = &s_items[cell_index->row];
-  snprintf(s_row_buffer, sizeof(s_row_buffer), "%s%s", item->done ? "[x] " : "[ ] ", item->name);
-  GBitmap *icon = (item->icon < ICON_CATEGORY_COUNT) ? s_category_icons[item->icon] : NULL;
-  menu_cell_basic_draw(ctx, cell_layer, s_row_buffer, NULL, icon);
+  draw_item_row(ctx, cell_layer, &s_items[cell_index->row]);
 }
 
 static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *context) {
@@ -388,6 +457,7 @@ static void window_load(Window *window) {
   menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks) {
     .get_num_sections = menu_get_num_sections_callback,
     .get_num_rows = menu_get_num_rows_callback,
+    .get_cell_height = menu_get_cell_height_callback,
     .get_header_height = menu_get_header_height_callback,
     .draw_header = menu_draw_header_callback,
     .draw_row = menu_draw_row_callback,
@@ -409,10 +479,14 @@ static void window_load(Window *window) {
 
   s_dictation_session = dictation_session_create(DICTATION_BUFFER_SIZE, dictation_session_callback, NULL);
 
-  for (int i = 0; i < ICON_CATEGORY_COUNT; i++) {
-    s_category_icons[i] = gbitmap_create_with_resource(CATEGORY_RESOURCE_IDS[i]);
+  // The colour icons don't convert well to black & white, so those watches show
+  // text only (the menu rows skip NULL icons).
+  if (PBL_IF_COLOR_ELSE(true, false)) {
+    for (int i = 0; i < ICON_CATEGORY_COUNT; i++) {
+      s_category_icons[i] = gbitmap_create_with_resource(CATEGORY_RESOURCE_IDS[i]);
+    }
+    s_add_icon = gbitmap_create_with_resource(RESOURCE_ID_ICON_APP);
   }
-  s_add_icon = gbitmap_create_with_resource(RESOURCE_ID_ICON_APP);
 
   update_ui();
   request_sync();
