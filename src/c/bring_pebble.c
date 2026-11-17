@@ -75,6 +75,8 @@ static AppTimer *s_retry_timer;
 static int s_retry_count = 0;
 
 static void update_ui(void);
+static void marquee_restart(void);
+static void marquee_stop(void);
 
 // ---------------------------------------------------------------------------
 // Localization
@@ -216,18 +218,22 @@ static void show_message(const char *text) {
 static void update_ui(void) {
   switch (s_state) {
     case STATE_LOADING:
+      marquee_stop();
       show_message(s_strings->loading);
       break;
     case STATE_NOT_CONFIGURED:
+      marquee_stop();
       show_message(s_strings->not_configured);
       break;
     case STATE_ERROR:
+      marquee_stop();
       show_message(s_message_text);
       break;
     case STATE_READY:
       layer_set_hidden(text_layer_get_layer(s_message_layer), true);
       layer_set_hidden(menu_layer_get_layer(s_menu_layer), false);
       menu_layer_reload_data(s_menu_layer);
+      marquee_restart(); // the items may have changed under the selection
       break;
   }
 }
@@ -308,41 +314,158 @@ static void menu_draw_header_callback(GContext *ctx, const Layer *cell_layer, ui
   }
 }
 
+// Horizontal layout of an item row, shared by the drawing code and the marquee.
+typedef struct {
+  GBitmap *icon;
+  GSize icon_size;
+  int16_t text_offset; // from the icon's left edge to the text
+  int16_t max_text_w;  // width of the text column
+  int16_t full_text_w; // width of the whole name on one line
+} ItemRowLayout;
+
+// Wide enough for any MAX_NAME_LEN name on one line.
+#define TEXT_MEASURE_WIDTH 2000
+
+static GFont item_font(void) {
+  return fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD); // the system menu cell title font
+}
+
+static ItemRowLayout item_row_layout(const BringItem *item, int16_t cell_w) {
+  ItemRowLayout l;
+  l.icon = (item->icon < ICON_CATEGORY_COUNT) ? s_category_icons[item->icon] : NULL;
+  l.icon_size = l.icon ? gbitmap_get_bounds(l.icon).size : GSize(0, 0);
+  l.text_offset = l.icon ? l.icon_size.w + ICON_TEXT_GAP : 0;
+  // On round, rows above and below the centre are narrower, so leave more room at the sides.
+  l.max_text_w = PBL_IF_ROUND_ELSE(cell_w * 4 / 5, cell_w - 2 * ROW_INSET) - l.text_offset;
+  l.full_text_w = graphics_text_layout_get_content_size(item->name, item_font(),
+                                                        GRect(0, 0, TEXT_MEASURE_WIDTH, 30),
+                                                        GTextOverflowModeTrailingEllipsis,
+                                                        GTextAlignmentLeft).w;
+  return l;
+}
+
+// ---------------------------------------------------------------------------
+// Marquee: the highlighted item scrolls horizontally when its name does not
+// fit, so it can be read in full. Scrolling starts MARQUEE_START_DELAY_MS
+// after the item was highlighted, pauses at the end, jumps back to the start
+// and repeats. Only the highlighted row ever scrolls; the others keep their
+// ellipsis. The highlighted row also shows the ellipsis while at offset 0.
+// ---------------------------------------------------------------------------
+
+#define MARQUEE_START_DELAY_MS 500
+#define MARQUEE_FRAME_MS 50
+#define MARQUEE_STEP_PX 2
+#define MARQUEE_END_PAUSE_MS 1000
+
+static AppTimer *s_marquee_timer;
+static int16_t s_marquee_offset = 0;
+
+// How far the highlighted item's name has to scroll to show its end (0 when
+// it fits or no item is highlighted).
+static int16_t selected_item_overflow(void) {
+  if (s_state != STATE_READY || !s_menu_layer) {
+    return 0;
+  }
+  MenuIndex index = menu_layer_get_selected_index(s_menu_layer);
+  if (index.section != 1 || index.row >= s_item_count) {
+    return 0;
+  }
+  int16_t cell_w = layer_get_bounds(menu_layer_get_layer(s_menu_layer)).size.w;
+  ItemRowLayout l = item_row_layout(&s_items[index.row], cell_w);
+  return l.full_text_w > l.max_text_w ? l.full_text_w - l.max_text_w : 0;
+}
+
+static void marquee_timer_callback(void *data) {
+  s_marquee_timer = NULL;
+  int16_t max_offset = selected_item_overflow();
+  if (max_offset <= 0) {
+    s_marquee_offset = 0;
+    return; // nothing to scroll; restarted when the selection changes
+  }
+
+  uint32_t next_ms = MARQUEE_FRAME_MS;
+  if (s_marquee_offset >= max_offset) {
+    s_marquee_offset = 0; // paused at the end: back to the start
+    next_ms = MARQUEE_START_DELAY_MS;
+  } else {
+    s_marquee_offset += MARQUEE_STEP_PX;
+    if (s_marquee_offset >= max_offset) {
+      s_marquee_offset = max_offset;
+      next_ms = MARQUEE_END_PAUSE_MS;
+    }
+  }
+  layer_mark_dirty(menu_layer_get_layer(s_menu_layer));
+  s_marquee_timer = app_timer_register(next_ms, marquee_timer_callback, NULL);
+}
+
+static void marquee_stop(void) {
+  if (s_marquee_timer) {
+    app_timer_cancel(s_marquee_timer);
+    s_marquee_timer = NULL;
+  }
+  s_marquee_offset = 0;
+}
+
+static void marquee_restart(void) {
+  marquee_stop();
+  s_marquee_timer = app_timer_register(MARQUEE_START_DELAY_MS, marquee_timer_callback, NULL);
+}
+
+// Set explicitly so the marquee can mask the row's sides in the same colour.
+#define ROW_HIGHLIGHT_BG GColorBlack
+#define ROW_HIGHLIGHT_FG GColorWhite
+
 // One-line item row: icon + name, left-aligned like the system cells on
 // rectangular watches, centred as a group on round ones.
 static void draw_item_row(GContext *ctx, const Layer *cell_layer, const BringItem *item) {
   GRect bounds = layer_get_bounds(cell_layer);
-  GFont font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD); // the system menu cell title font
-  GBitmap *icon = (item->icon < ICON_CATEGORY_COUNT) ? s_category_icons[item->icon] : NULL;
-  GSize icon_size = icon ? gbitmap_get_bounds(icon).size : GSize(0, 0);
-  int16_t text_offset = icon ? icon_size.w + ICON_TEXT_GAP : 0;
+  bool highlighted = menu_cell_layer_is_highlighted(cell_layer);
+  ItemRowLayout l = item_row_layout(item, bounds.size.w);
 
-  // On round, rows above and below the centre are narrower, so leave more room at the sides.
-  int16_t max_text_w = PBL_IF_ROUND_ELSE(bounds.size.w * 4 / 5, bounds.size.w - 2 * ROW_INSET) - text_offset;
-  GSize text_size = graphics_text_layout_get_content_size(item->name, font, GRect(0, 0, max_text_w, 30),
-                                                          GTextOverflowModeTrailingEllipsis,
-                                                          GTextAlignmentLeft);
-  int16_t x = PBL_IF_ROUND_ELSE((bounds.size.w - text_offset - text_size.w) / 2, ROW_INSET);
-
-  if (icon) {
-    graphics_context_set_compositing_mode(ctx, GCompOpSet); // as the system menu cells do
-    graphics_draw_bitmap_in_rect(ctx, icon, GRect(x, (bounds.size.h - icon_size.h) / 2, icon_size.w, icon_size.h));
-  }
+  int16_t max_offset = l.full_text_w > l.max_text_w ? l.full_text_w - l.max_text_w : 0;
+  int16_t scroll = highlighted ? (s_marquee_offset < max_offset ? s_marquee_offset : max_offset) : 0;
+  int16_t text_w = l.full_text_w < l.max_text_w ? l.full_text_w : l.max_text_w;
+  int16_t x = PBL_IF_ROUND_ELSE((bounds.size.w - l.text_offset - text_w) / 2, ROW_INSET);
+  int16_t text_x = x + l.text_offset;
 
   if (item->done) {
-    GColor grey = menu_cell_layer_is_highlighted(cell_layer) ? PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite)
-                                                             : PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack);
+    GColor grey = highlighted ? PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite)
+                              : PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack);
     graphics_context_set_text_color(ctx, grey);
     graphics_context_set_stroke_color(ctx, grey);
   }
 
   // Gothic 24 leaves space above its glyphs; shift the box up so the text is centred.
-  GRect text_box = GRect(x + text_offset, (bounds.size.h - 24) / 2 - 4, text_size.w, 30);
-  graphics_draw_text(ctx, item->name, font, text_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  int16_t text_y = (bounds.size.h - 24) / 2 - 4;
+  GRect text_box;
+  if (scroll > 0) {
+    // The whole name, shifted left; a little slack so it is never ellipsized.
+    text_box = GRect(text_x - scroll, text_y, l.full_text_w + 8, 30);
+  } else {
+    text_box = GRect(text_x, text_y, text_w, 30);
+  }
+  graphics_draw_text(ctx, item->name, item_font(), text_box, GTextOverflowModeTrailingEllipsis,
+                     GTextAlignmentLeft, NULL);
 
   if (item->done) {
     int16_t y = bounds.size.h / 2 + 1;
-    graphics_draw_line(ctx, GPoint(text_box.origin.x, y), GPoint(text_box.origin.x + text_size.w, y));
+    int16_t line_w = scroll > 0 ? l.full_text_w : text_w;
+    graphics_draw_line(ctx, GPoint(text_box.origin.x, y), GPoint(text_box.origin.x + line_w, y));
+  }
+
+  if (scroll > 0) {
+    // There is no clipping for drawing within a layer, so cover whatever
+    // scrolled out of the text column; the icon is drawn on top afterwards.
+    graphics_context_set_fill_color(ctx, ROW_HIGHLIGHT_BG);
+    graphics_fill_rect(ctx, GRect(0, 0, text_x, bounds.size.h), 0, GCornerNone);
+    int16_t right = text_x + l.max_text_w;
+    graphics_fill_rect(ctx, GRect(right, 0, bounds.size.w - right, bounds.size.h), 0, GCornerNone);
+  }
+
+  if (l.icon) {
+    graphics_context_set_compositing_mode(ctx, GCompOpSet); // as the system menu cells do
+    graphics_draw_bitmap_in_rect(ctx, l.icon,
+                                 GRect(x, (bounds.size.h - l.icon_size.h) / 2, l.icon_size.w, l.icon_size.h));
   }
 }
 
@@ -353,6 +476,12 @@ static void menu_draw_row_callback(GContext *ctx, const Layer *cell_layer, MenuI
   }
 
   draw_item_row(ctx, cell_layer, &s_items[cell_index->row]);
+}
+
+static void menu_selection_changed_callback(MenuLayer *menu_layer, MenuIndex new_index, MenuIndex old_index,
+                                            void *context) {
+  marquee_restart();
+  layer_mark_dirty(menu_layer_get_layer(menu_layer)); // drop the old row's scroll offset at once
 }
 
 static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *context) {
@@ -462,7 +591,9 @@ static void window_load(Window *window) {
     .draw_header = menu_draw_header_callback,
     .draw_row = menu_draw_row_callback,
     .select_click = menu_select_callback,
+    .selection_changed = menu_selection_changed_callback,
   });
+  menu_layer_set_highlight_colors(s_menu_layer, ROW_HIGHLIGHT_BG, ROW_HIGHLIGHT_FG);
   menu_layer_set_click_config_onto_window(s_menu_layer, window);
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
 
@@ -493,6 +624,7 @@ static void window_load(Window *window) {
 }
 
 static void window_unload(Window *window) {
+  marquee_stop();
   if (s_retry_timer) {
     app_timer_cancel(s_retry_timer);
     s_retry_timer = NULL;
