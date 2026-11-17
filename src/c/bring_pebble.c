@@ -479,10 +479,14 @@ static void window_load(Window *window) {
 
   s_dictation_session = dictation_session_create(DICTATION_BUFFER_SIZE, dictation_session_callback, NULL);
 
-  for (int i = 0; i < ICON_CATEGORY_COUNT; i++) {
-    s_category_icons[i] = gbitmap_create_with_resource(CATEGORY_RESOURCE_IDS[i]);
+  // The colour icons don't convert well to black & white, so those watches show
+  // text only (the menu rows skip NULL icons).
+  if (PBL_IF_COLOR_ELSE(true, false)) {
+    for (int i = 0; i < ICON_CATEGORY_COUNT; i++) {
+      s_category_icons[i] = gbitmap_create_with_resource(CATEGORY_RESOURCE_IDS[i]);
+    }
+    s_add_icon = gbitmap_create_with_resource(RESOURCE_ID_ICON_APP);
   }
-  s_add_icon = gbitmap_create_with_resource(RESOURCE_ID_ICON_APP);
 
   update_ui();
   request_sync();
