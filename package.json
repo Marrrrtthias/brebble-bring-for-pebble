@@ -44,13 +44,19 @@
       "media": [
         { "type": "bitmap", "name": "ICON_APP", "file": "images/icon_app.png", "menuIcon": true },
         { "type": "bitmap", "name": "ICON_DEFAULT", "file": "images/icon_default.png" },
+        { "type": "bitmap", "name": "ICON_PRODUCE", "file": "images/icon_produce.png" },
         { "type": "bitmap", "name": "ICON_BREAD", "file": "images/icon_bread.png" },
         { "type": "bitmap", "name": "ICON_DAIRY", "file": "images/icon_dairy.png" },
-        { "type": "bitmap", "name": "ICON_FRUIT", "file": "images/icon_fruit.png" },
-        { "type": "bitmap", "name": "ICON_VEGETABLE", "file": "images/icon_vegetable.png" },
         { "type": "bitmap", "name": "ICON_MEAT", "file": "images/icon_meat.png" },
+        { "type": "bitmap", "name": "ICON_INGREDIENTS", "file": "images/icon_ingredients.png" },
+        { "type": "bitmap", "name": "ICON_FROZEN", "file": "images/icon_frozen.png" },
+        { "type": "bitmap", "name": "ICON_GRAIN", "file": "images/icon_grain.png" },
+        { "type": "bitmap", "name": "ICON_SNACKS", "file": "images/icon_snacks.png" },
         { "type": "bitmap", "name": "ICON_DRINK", "file": "images/icon_drink.png" },
-        { "type": "bitmap", "name": "ICON_CLEANING", "file": "images/icon_cleaning.png" }
+        { "type": "bitmap", "name": "ICON_HOUSEHOLD", "file": "images/icon_household.png" },
+        { "type": "bitmap", "name": "ICON_CARE", "file": "images/icon_care.png" },
+        { "type": "bitmap", "name": "ICON_PET", "file": "images/icon_pet.png" },
+        { "type": "bitmap", "name": "ICON_GARDEN", "file": "images/icon_garden.png" }
       ]
     }
   }

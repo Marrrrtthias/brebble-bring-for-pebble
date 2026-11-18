@@ -124,7 +124,7 @@ function sendItemsThenDone(items, locale) {
           itemIndex: index,
           itemName: item.name,
           itemDone: item.done ? 1 : 0,
-          itemIcon: Categorize.categorize(item.name, locale)
+          itemIcon: Categorize.iconFor(item, locale)
         },
         function () { i++; sendNext(); },
         function () { i++; sendNext(); } // best-effort: skip a dropped item instead of stalling the sync
@@ -160,10 +160,10 @@ function syncList() {
       var merged = [];
       var i;
       for (i = 0; i < items.purchase.length; i++) {
-        merged.push({ name: items.purchase[i].itemId, done: false });
+        merged.push({ name: items.purchase[i].itemId, sectionId: items.purchase[i].sectionId, done: false });
       }
       for (i = 0; i < items.recently.length; i++) {
-        merged.push({ name: items.recently[i].itemId, done: true });
+        merged.push({ name: items.recently[i].itemId, sectionId: items.recently[i].sectionId, done: true });
       }
       // Item names are in the Bring! account's language. If that couldn't be
       // determined, catalog items were left untranslated, i.e. in German.

@@ -33,8 +33,8 @@ fallback), Spanish, German, French, Italian and Portuguese.
 - Catalog items are translated to the Bring! account's language (see below).
 
 To add a language, add an entry to `STRINGS` in `src/c/strings.c` and to
-`TEXTS` in `src/pkjs/config.js`, and optionally a keyword
-list for that language in `src/pkjs/categorize.js`.
+`TEXTS` in `src/pkjs/config.js`, and optionally a keyword list for that
+language in `src/pkjs/categorize.js` (icon guess for free-typed items).
 
 ## How it works
 
@@ -44,11 +44,12 @@ list for that language in `src/pkjs/categorize.js`.
 - **`src/pkjs/`**: the phone bridge (PebbleKit JS). The watch *never* talks to
   Bring! directly; it only exchanges short `AppMessage`s with the phone, which
   makes the HTTPS calls to `api.getbring.com`.
-  - `bring-api.js`: Bring! API client (login, token refresh, read list,
-    add/complete/restore items).
+  - `bring-api.js`: Bring! API client (login, token refresh, read list with
+    each item's section, add/complete/restore items).
   - `config.js`: builds the settings page (login, list name, connection
     test) that opens in the phone's browser.
-  - `categorize.js`: keyword-based icon category guess for list items.
+  - `categorize.js`: maps an item's Bring! section to its icon, with a
+    keyword-based guess for items without a section.
   - `index.js`: ties everything together, handling watch messages and
     configuration events.
 
@@ -99,7 +100,7 @@ npm run test:js   # phone-side unit tests (node --test, no dependencies)
 npm run test:c    # watch string tables, compiled on the host with cc
 ```
 
-The JS tests cover item categorization, locale handling, text truncation and
+The JS tests cover item sections and icons, locale handling, text truncation and
 the configuration page, and check that constants shared between the watch (C)
 and the phone (JS) still match. The C test checks every language's string
 table: no missing strings, exactly one `%s` in the list-not-found message,
@@ -138,16 +139,23 @@ instead of replacing it, and the settings must be entered again.
   public locale dictionary. This covers the most common languages (`es-ES`,
   `en-US`, `fr-FR`, etc.; see `BRING_SUPPORTED_LOCALES` in `bring-api.js`); a
   very specific regional variant not listed there may not be translated.
-- **Item icons**: category icons are guessed from keywords in the language of
-  your Bring! account (or German, Bring!'s catalog language, when the account
-  language can't be determined). Only that language's keywords are used, so a
-  name in another language, an unrecognized name, or any item on an account in
-  a language without keywords (e.g. Dutch) gets the default icon. Matching depends on the
+- **Item icons**: each item shows the icon of its Bring! section (fruit &
+  vegetables, bread & pastries, milk & cheese, meat & fish, ingredients &
+  spices, frozen & convenience, grain products, snacks & sweets, beverages,
+  household, care & health, pet supplies, home & garden). The section comes
+  from the section you assigned the item to in that list, otherwise from
+  Bring!'s public item catalog for your account's locale
+  (`catalog.<locale>.json`), the same data the Bring! apps sort by.
+  Free-typed items you never sorted into a section have none; for those the
+  icon is guessed from keywords in the language of your Bring! account (or
+  German, Bring!'s catalog language, when the account language can't be
+  determined). Only that language's keywords are used, so a name in another
+  language, an unrecognized name, or any such item on an account in a language
+  without keywords (e.g. Dutch) gets the default icon. Matching depends on the
   language: German matches keywords at the end of a word (compounds such as
-  "Vollmilch"), all other languages match whole words including common
-  plural forms ("tomatoes", "limones"). German, French, Italian and
-  Portuguese have short keyword lists so far; Spanish and English are the
-  most complete.
+  "Vollmilch"), all other languages match whole words including common plural
+  forms ("tomatoes", "limones"). German, French, Italian and Portuguese have
+  short keyword lists so far; Spanish and English are the most complete.
 
 ## Tested
 
