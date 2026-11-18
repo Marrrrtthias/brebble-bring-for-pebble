@@ -53,7 +53,13 @@ for platform in "${PLATFORMS[@]}"; do
   sleep 15
   shot() { (cd "$WORK/app" && pebble screenshot --emulator "$platform" --no-open "$HERE/$(watch_name "$platform")_$1.png"); }
   shot 1
-  (cd "$WORK/app" && pebble emu-button --emulator "$platform" click down --repeat 4 --interval 300)
+  # One click at a time: rapid repeated clicks get dropped by the emulator,
+  # and the second shot must highlight Chicken breast (an item with details,
+  # which round watches show only on the highlighted item).
+  for _ in 1 2 3 4; do
+    (cd "$WORK/app" && pebble emu-button --emulator "$platform" click down)
+    sleep 1
+  done
   sleep 2
   shot 2
 done
