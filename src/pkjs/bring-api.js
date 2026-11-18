@@ -101,7 +101,7 @@ function saveCredentials(email, password, wantedListName) {
 }
 
 // Result of the last account check, shown on the settings page:
-// { code, detail, lists: [names], listName, email, test, at }
+// { ok, reason, lists: [names], listName, wantedListName, email, test, at }
 function saveLastCheck(check) {
   localStorage.setItem('bring_lastCheck', JSON.stringify(check));
 }
@@ -343,6 +343,12 @@ function assignSections(list, userSections, catalogSections) {
   }
 }
 
+function storeTokens(state, data) {
+  state.accessToken = data.access_token;
+  state.tokenType = data.token_type || 'Bearer';
+  state.expiresAt = Date.now() + (data.expires_in * 1000) - 30000;
+}
+
 function loginAndSave(state, callback) {
   login(state.email, state.password, function (err, data) {
     if (err || !data || !data.access_token) {
@@ -351,10 +357,8 @@ function loginAndSave(state, callback) {
     }
     state.uuid = data.uuid;
     state.publicUuid = data.publicUuid;
-    state.accessToken = data.access_token;
     state.refreshToken = data.refresh_token;
-    state.tokenType = data.token_type || 'Bearer';
-    state.expiresAt = Date.now() + (data.expires_in * 1000) - 30000;
+    storeTokens(state, data);
     saveState(state);
     callback(null, state);
   });
@@ -368,33 +372,29 @@ function ensureAuth(callback) {
     callback(new Error('not configured'));
     return;
   }
-  function withLocale(s) {
+  function withLocale(err, s) {
+    if (err) { callback(err); return; }
     applyUserLocale(s, function (s2) { callback(null, s2); });
   }
   if (state.accessToken && state.expiresAt > Date.now()) {
-    withLocale(state);
+    withLocale(null, state);
     return;
   }
-  if (state.refreshToken) {
-    refreshToken(state, function (err, data) {
-      if (!err && data && data.access_token) {
-        state.accessToken = data.access_token;
-        state.tokenType = data.token_type || 'Bearer';
-        state.expiresAt = Date.now() + (data.expires_in * 1000) - 30000;
-        saveState(state);
-        withLocale(state);
-        return;
-      }
-      loginAndSave(state, function (err2, s2) {
-        if (err2) { callback(err2); return; }
-        withLocale(s2);
-      });
-    });
+  if (!state.refreshToken) {
+    loginAndSave(state, withLocale);
     return;
   }
-  loginAndSave(state, function (err2, s2) {
-    if (err2) { callback(err2); return; }
-    withLocale(s2);
+  refreshToken(state, function (err, data) {
+    if (!err && data && data.access_token) {
+      storeTokens(state, data);
+      saveState(state);
+      withLocale(null, state);
+    } else if (err && !isLoginRejected(err)) {
+      // No connection: a full login would fail the same way.
+      callback(err);
+    } else {
+      loginAndSave(state, withLocale);
+    }
   });
 }
 

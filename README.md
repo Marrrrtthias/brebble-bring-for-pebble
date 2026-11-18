@@ -40,7 +40,8 @@ language in `src/pkjs/categorize.js` (icon guess for free-typed items).
 
 - **`src/c/bring_pebble.c`**: the watch UI. A `MenuLayer` with "+ Add item" at
   the top (voice dictation) and the list below (`[ ]`/`[x]` depending on
-  whether it was bought). Selecting an item toggles it.
+  whether it was bought). Selecting an item toggles it; holding SELECT
+  reloads the list from Bring!.
 - **`src/pkjs/`**: the phone bridge (PebbleKit JS). The watch *never* talks to
   Bring! directly; it only exchanges short `AppMessage`s with the phone, which
   makes the HTTPS calls to `api.getbring.com`.

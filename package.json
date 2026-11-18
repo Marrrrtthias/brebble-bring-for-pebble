@@ -11,7 +11,7 @@
   },
   "dependencies": {},
   "pebble": {
-    "displayName": "Brebble! Bring for pebble",
+    "displayName": "Brebble!",
     "uuid": "5a197acd-4c8b-4188-a39b-3bea717f1d64",
     "sdkVersion": "3",
     "enableMultiJS": true,
