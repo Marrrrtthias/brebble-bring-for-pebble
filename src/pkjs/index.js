@@ -22,6 +22,41 @@ var ERR_LIST_NOT_FOUND = 5;
 
 var MAX_ITEMS = 80; // must match MAX_ITEMS in src/c/bring_pebble.c
 
+// Longest item detail ("500 ml") sent to the watch, in UTF-16 code units. The
+// watch keeps at most MAX_DETAIL_LEN - 1 bytes (src/c/bring_pebble.c) and cuts
+// longer UTF-8 text at a character boundary; a subtitle this long scrolls
+// anyway.
+var MAX_DETAIL = 36;
+
+// The items last sent to the watch, by index. Toggling an item on the watch
+// only reports its name, so the details are looked up here and sent back
+// with the change instead of an empty specification, which could clear them.
+var s_lastItems = [];
+
+// Bring! list entries -> [{ name, detail, done }], open items first.
+function toWatchItems(purchase, recently) {
+  var merged = [];
+  function add(entries, done) {
+    for (var i = 0; i < entries.length; i++) {
+      merged.push({
+        name: entries[i].itemId,
+        detail: String(entries[i].specification || '').replace(/\s+/g, ' ').trim(),
+        done: done
+      });
+    }
+  }
+  add(purchase || [], false);
+  add(recently || [], true);
+  return merged.slice(0, MAX_ITEMS);
+}
+
+// The details of the item the watch reports at `index`, if it is still the
+// item with that name.
+function lastDetail(index, name) {
+  var item = s_lastItems[index];
+  return item && item.name === name ? item.detail : '';
+}
+
 // The user has entered credentials. The list may still need to be resolved
 // (see resolveListThen).
 function isConfigured() {
@@ -117,15 +152,18 @@ function sendItemsThenDone(items, locale) {
         return;
       }
       var item = items[i];
-      var index = i;
+      var msg = {
+        action: ACTION_SYNC_ITEM,
+        itemIndex: i,
+        itemName: item.name,
+        itemDone: item.done ? 1 : 0,
+        itemIcon: Categorize.categorize(item.name, locale)
+      };
+      if (item.detail) {
+        msg.itemDetail = Text.truncateText(item.detail, MAX_DETAIL);
+      }
       Pebble.sendAppMessage(
-        {
-          action: ACTION_SYNC_ITEM,
-          itemIndex: index,
-          itemName: item.name,
-          itemDone: item.done ? 1 : 0,
-          itemIcon: Categorize.categorize(item.name, locale)
-        },
+        msg,
         function () { i++; sendNext(); },
         function () { i++; sendNext(); } // best-effort: skip a dropped item instead of stalling the sync
       );
@@ -157,17 +195,10 @@ function syncList() {
         sendError(ERR_READ_LIST);
         return;
       }
-      var merged = [];
-      var i;
-      for (i = 0; i < items.purchase.length; i++) {
-        merged.push({ name: items.purchase[i].itemId, done: false });
-      }
-      for (i = 0; i < items.recently.length; i++) {
-        merged.push({ name: items.recently[i].itemId, done: true });
-      }
+      s_lastItems = toWatchItems(items.purchase, items.recently);
       // Item names are in the Bring! account's language. If that couldn't be
       // determined, catalog items were left untranslated, i.e. in German.
-      sendItemsThenDone(merged.slice(0, MAX_ITEMS), state.locale || BringApi.BRING_DEFAULT_LOCALE);
+      sendItemsThenDone(s_lastItems, state.locale || BringApi.BRING_DEFAULT_LOCALE);
     });
   });
 }
@@ -209,8 +240,9 @@ Pebble.addEventListener('appmessage', function (e) {
 
   if (payload.action === ACTION_TOGGLE_ITEM) {
     var toggleOp = payload.itemDone ? 'TO_RECENTLY' : 'TO_PURCHASE';
+    var toggleDetail = lastDetail(payload.itemIndex, payload.itemName);
     withAuth(function (state) {
-      BringApi.updateItem(state, payload.itemName, toggleOp, function () {
+      BringApi.updateItem(state, payload.itemName, toggleOp, toggleDetail, function () {
         // Re-sync regardless of success so the watch always reflects server state.
         doSync();
       });
@@ -230,7 +262,7 @@ Pebble.addEventListener('appmessage', function (e) {
       return;
     }
     withAuth(function (state) {
-      BringApi.updateItem(state, name, 'TO_PURCHASE', function () {
+      BringApi.updateItem(state, name, 'TO_PURCHASE', '', function () {
         doSync();
       });
     });

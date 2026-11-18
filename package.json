@@ -36,6 +36,7 @@
       "itemName",
       "itemDone",
       "itemIcon",
+      "itemDetail",
       "errorMsg",
       "errorCode",
       "locale"
