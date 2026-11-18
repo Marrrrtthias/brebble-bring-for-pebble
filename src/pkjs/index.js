@@ -125,6 +125,24 @@ function resolveListThen(next) {
   });
 }
 
+// Watch setting: turn off touch input on watches with a touchscreen, so a
+// stray tap can't check off an item. Stored here and sent to the watch, which
+// keeps its own copy. Default: touch stays on.
+var TOUCH_DISABLED_KEY = 'bring_touchDisabled';
+
+function loadTouchDisabled() {
+  return localStorage.getItem(TOUCH_DISABLED_KEY) === '1';
+}
+
+function saveTouchDisabled(disabled) {
+  localStorage.setItem(TOUCH_DISABLED_KEY, disabled ? '1' : '0');
+}
+
+// Sent without an action: the watch applies the setting from any message.
+function sendWatchSettings() {
+  Pebble.sendAppMessage({ touchDisabled: loadTouchDisabled() ? 1 : 0 });
+}
+
 function sendNotConfigured() {
   Pebble.sendAppMessage({ action: ACTION_NOT_CONFIGURED });
 }
@@ -245,6 +263,9 @@ Pebble.addEventListener('appmessage', function (e) {
       // Remember the watch's language so the config page can match it.
       localStorage.setItem('bring_watchLocale', String(payload.locale));
     }
+    // The watch asks on every start, so it also gets the latest settings
+    // (e.g. after a reinstall, or if it was not connected when they were saved).
+    sendWatchSettings();
     doSync();
     return;
   }
@@ -314,6 +335,7 @@ function openSettings(draft, check) {
     listName: draft ? draft.listName : BringApi.loadWantedListName(),
     password: draft ? draft.password : '',
     hasPassword: !!saved.password,
+    touchDisabled: draft ? !!draft.touchDisabled : loadTouchDisabled(),
     locale: currentWatchLocale(),
     check: check
   }));
@@ -331,6 +353,12 @@ Pebble.addEventListener('webviewclosed', function (e) {
   if (!data) {
     return;
   }
+  // The watch setting does not depend on the account, so it is saved (and
+  // sent to the watch) even if the credentials are incomplete.
+  if (data.action === 'save' && typeof data.touchDisabled === 'boolean') {
+    saveTouchDisabled(data.touchDisabled);
+    sendWatchSettings();
+  }
   var email = String(data.email || '').trim();
   var typedPassword = String(data.password || '');
   var wantedListName = String(data.listName || '').trim();
@@ -346,7 +374,8 @@ Pebble.addEventListener('webviewclosed', function (e) {
     BringApi.checkAccount(email, password, wantedListName, function (result) {
       var check = checkRecord(result, email, wantedListName, true);
       BringApi.saveLastCheck(check);
-      openSettings({ email: email, password: typedPassword, listName: wantedListName }, check);
+      openSettings({ email: email, password: typedPassword, listName: wantedListName,
+                     touchDisabled: !!data.touchDisabled }, check);
     });
     return;
   }

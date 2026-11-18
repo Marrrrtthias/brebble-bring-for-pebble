@@ -99,3 +99,12 @@ test('parseConfigResponse accepts encoded and plain JSON', function () {
   assert.deepStrictEqual(Config.parseConfigResponse(JSON.stringify(data)), data);
   assert.strictEqual(Config.parseConfigResponse('not json'), null);
 });
+
+test('disable-touch checkbox reflects the saved setting and is sent back', function () {
+  setPhoneLanguage('en-US');
+  var off = pageOf({});
+  assert.ok(off.indexOf('<input id="touchDisabled" type="checkbox"> Disable touch') >= 0);
+  var on = pageOf({ touchDisabled: true });
+  assert.ok(on.indexOf('<input id="touchDisabled" type="checkbox" checked> Disable touch') >= 0);
+  assert.ok(on.indexOf('touchDisabled: $("touchDisabled").checked') >= 0);
+});
