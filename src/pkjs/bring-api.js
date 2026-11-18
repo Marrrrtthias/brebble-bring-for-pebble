@@ -521,7 +521,9 @@ function getListItems(state, callback) {
 
 // operation: 'TO_PURCHASE' (add / move back to the shopping list),
 //            'TO_RECENTLY' (mark as bought / completed)
-function updateItem(state, itemName, operation, callback) {
+// specification: the item's details ("500 ml"), '' for none. Bring! stores
+// whatever is sent, so pass the current details to keep them.
+function updateItem(state, itemName, operation, specification, callback) {
   // itemName may be a translated catalog name (e.g. "Coffee" shown on the
   // watch); Bring! only recognizes the German canonical id ("Kaffee") server
   // side, so it has to be translated back before sending. Free-typed items
@@ -537,7 +539,7 @@ function updateItem(state, itemName, operation, callback) {
         latitude: '0.0',
         longitude: '0.0',
         itemId: canonicalId,
-        spec: '',
+        spec: specification || '',
         uuid: null,
         operation: operation
       }],

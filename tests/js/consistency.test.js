@@ -86,3 +86,10 @@ test('every icon in the C table is a declared resource with generated images', f
   });
   assert.strictEqual(scriptNames.length, icons.length);
 });
+
+test('item details sent by JS fit the watch buffer when they are plain ASCII', function () {
+  var js = Number(indexJs.match(/^var MAX_DETAIL = (\d+);/m)[1]);
+  var c = Number(cSource.match(/^#define MAX_DETAIL_LEN (\d+)/m)[1]);
+  // JS adds a 3-byte "…" when it shortens a detail; the watch needs a NUL too.
+  assert.ok(js + 3 + 1 <= c, 'MAX_DETAIL ' + js + ' vs MAX_DETAIL_LEN ' + c);
+});
