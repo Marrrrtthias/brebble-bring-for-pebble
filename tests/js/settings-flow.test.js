@@ -26,7 +26,7 @@ FakeXHR.prototype.send = function () {
     } else if (/v2\/bringusers\//.test(xhr.url)) {
       body = JSON.stringify({ userLocale: { language: 'en', country: 'US' } });
     } else if (/v2\/bringlists\//.test(xhr.url)) {
-      body = JSON.stringify({ items: { purchase: [{ itemId: 'Milk' }], recently: [] } });
+      body = JSON.stringify({ items: server.items });
     }
     if (status === 0) { xhr.onerror(); return; }
     xhr.status = status;
@@ -44,7 +44,8 @@ function setup() {
   };
   globalThis.XMLHttpRequest = FakeXHR;
   Object.defineProperty(globalThis, 'navigator', { value: { language: 'en-US' }, configurable: true, writable: true });
-  server = { login: 200, lists: [{ listUuid: 'l1', name: 'Home' }, { listUuid: 'l2', name: 'Work' }] };
+  server = { login: 200, lists: [{ listUuid: 'l1', name: 'Home' }, { listUuid: 'l2', name: 'Work' }],
+    items: { purchase: [{ itemId: 'Milk' }], recently: [] } };
   opened = [];
   sent = [];
   listeners = {};
@@ -142,4 +143,22 @@ test('testing stores nothing and reopens the page with the result', async functi
   assert.ok(page.indexOf('no list named “Nope”') >= 0);
   assert.ok(page.indexOf('data-list="Work"') >= 0);
   assert.ok(page.indexOf('secret') < 0);
+});
+
+test('a repeated sync request (manual refresh on the watch) sends the current list again', async function () {
+  setup();
+  closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '' });
+  await settle();
+
+  // The list changed on another device since the last sync.
+  server.items = { purchase: [{ itemId: 'Eggs' }], recently: [{ itemId: 'Milk' }] };
+  sent = [];
+  listeners.appmessage({ payload: { action: 0 } }); // ACTION_REQUEST_SYNC
+  await settle();
+
+  var actions = sent.map(function (m) { return m.action; });
+  assert.deepStrictEqual(actions, [7, 1, 1, 2]); // SYNC_START, two items, SYNC_DONE
+  assert.deepStrictEqual(sent.filter(function (m) { return m.action === 1; }).map(function (m) {
+    return [m.itemIndex, m.itemName, m.itemDone];
+  }), [[0, 'Eggs', 0], [1, 'Milk', 1]]);
 });
