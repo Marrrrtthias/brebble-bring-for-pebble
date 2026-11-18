@@ -74,6 +74,12 @@ static char s_message_text[256];
 static AppTimer *s_retry_timer;
 static int s_retry_count = 0;
 
+// Set by a manual refresh (long-press SELECT): the item that was highlighted,
+// so the same item can be highlighted again once the fresh list has arrived.
+static bool s_restore_selection = false;
+static MenuIndex s_saved_index;
+static char s_saved_item_name[MAX_NAME_LEN];
+
 static void update_ui(void);
 static void marquee_restart(void);
 static void marquee_stop(void);
@@ -552,6 +558,50 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
   menu_layer_reload_data(s_menu_layer);
 }
 
+// Long-press SELECT: reload the list from Bring! (it otherwise only loads when
+// the app starts or after a change made on the watch). Also works as "retry"
+// on an error screen.
+static void menu_select_long_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *context) {
+  if (s_state == STATE_LOADING) {
+    return; // a sync is already running
+  }
+  s_restore_selection = (s_state == STATE_READY);
+  if (s_restore_selection) {
+    s_saved_index = menu_layer_get_selected_index(menu_layer);
+    s_saved_item_name[0] = '\0';
+    if (s_saved_index.section == 1 && s_saved_index.row < s_item_count) {
+      strncpy(s_saved_item_name, s_items[s_saved_index.row].name, MAX_NAME_LEN - 1);
+      s_saved_item_name[MAX_NAME_LEN - 1] = '\0';
+    }
+  }
+  vibes_short_pulse();
+  request_sync(); // shows the loading screen until the fresh list has arrived
+}
+
+// After a manual refresh: highlight the previously highlighted item again,
+// found by name since its position may have changed. If it is gone, stay at
+// the same position, or on the last item if the list got shorter.
+static void restore_selection(void) {
+  s_restore_selection = false;
+  MenuIndex target = s_saved_index;
+  if (target.section == 1) {
+    int row = -1;
+    if (s_saved_item_name[0]) {
+      for (int i = 0; i < s_item_count; i++) {
+        if (strcmp(s_items[i].name, s_saved_item_name) == 0) {
+          row = i;
+          break;
+        }
+      }
+    }
+    if (row < 0) {
+      row = target.row < s_item_count ? target.row : s_item_count - 1;
+    }
+    target = row >= 0 ? MenuIndex(1, row) : MenuIndex(0, 0);
+  }
+  menu_layer_set_selected_index(s_menu_layer, target, MenuRowAlignCenter, false);
+}
+
 // ---------------------------------------------------------------------------
 // AppMessage: incoming
 // ---------------------------------------------------------------------------
@@ -564,6 +614,11 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
 
   switch ((BringAction)action_tuple->value->int32) {
     case ACTION_SYNC_START:
+      // The phone is answering: a retry would only start a second stream.
+      if (s_retry_timer) {
+        app_timer_cancel(s_retry_timer);
+        s_retry_timer = NULL;
+      }
       s_item_count = 0;
       break;
     case ACTION_SYNC_ITEM: {
@@ -596,6 +651,9 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
     case ACTION_SYNC_DONE:
       s_state = STATE_READY;
       update_ui();
+      if (s_restore_selection) {
+        restore_selection();
+      }
       break;
     case ACTION_ERROR: {
       Tuple *code_t = dict_find(iterator, MESSAGE_KEY_errorCode);
@@ -640,6 +698,7 @@ static void window_load(Window *window) {
     .draw_header = menu_draw_header_callback,
     .draw_row = menu_draw_row_callback,
     .select_click = menu_select_callback,
+    .select_long_click = menu_select_long_callback,
     .selection_changed = menu_selection_changed_callback,
   });
   menu_layer_set_highlight_colors(s_menu_layer, ROW_HIGHLIGHT_BG, ROW_HIGHLIGHT_FG);
