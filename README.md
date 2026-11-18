@@ -46,8 +46,8 @@ list for that language in `src/pkjs/categorize.js`.
   makes the HTTPS calls to `api.getbring.com`.
   - `bring-api.js`: Bring! API client (login, token refresh, read list,
     add/complete/restore items).
-  - `config.js`: builds the configuration screen (login + list selection)
-    that opens in the phone's browser.
+  - `config.js`: builds the settings page (login, list name, connection
+    test) that opens in the phone's browser.
   - `categorize.js`: keyword-based icon category guess for list items.
   - `index.js`: ties everything together, handling watch messages and
     configuration events.
@@ -56,11 +56,29 @@ list for that language in `src/pkjs/categorize.js`.
 
 1. Install the app on the watch (see below).
 2. On the phone, open the Pebble app → this app → **Settings**.
-3. Enter your Bring! email and password, optionally a list name, and save.
-4. The watch syncs automatically as soon as the settings are saved.
+3. Enter your Bring! email and password, and optionally a list name (empty =
+   your default list).
+4. Tap **Test connection** to check them: the page closes for a moment while
+   the phone logs in, then opens again showing whether it worked, which list
+   was found and all lists of the account (tap one to pick it). Testing does
+   not save anything.
+5. Tap **Save**. The watch syncs automatically as soon as the settings are
+   saved. The next time you open Settings, it shows the result of the last
+   check of the saved settings.
+
+The settings page can't call Bring! itself (Bring!'s API rejects requests
+from a browser), so the test runs in the Pebble app's JavaScript and the page
+is reopened with the result. If your Pebble app doesn't reopen it, open
+Settings again to see the result.
+
+Saved settings are kept until you change them: a failed login or a network
+error never removes them, and if the list could not be looked up while
+saving, the next sync tries again. To keep the saved password, leave the
+password field empty.
 
 The email and password are stored only in the Pebble app's `localStorage` on
-that phone (they are never sent to the watch). The password is used to log in
+that phone (they are never sent to the watch, and the saved password is never
+put into the settings page). The password is used to log in
 again when the refresh token expires; if that concerns you, it is easy to
 change `bring-api.js` to not persist it and ask for the login again when the
 refresh fails.

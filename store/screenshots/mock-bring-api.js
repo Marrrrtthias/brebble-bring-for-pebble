@@ -26,11 +26,15 @@ module.exports = {
   BRING_DEFAULT_LOCALE: BRING_DEFAULT_LOCALE,
   loadState: loadState,
   saveState: noop,
-  saveConfigError: noop,
-  loadConfigError: function () { return null; },
-  clearConfigError: noop,
+  loadWantedListName: function () { return 'Groceries'; },
+  saveCredentials: noop,
+  saveLastCheck: noop,
+  loadLastCheck: function () { return null; },
+  isLoginRejected: function () { return false; },
+  checkAccount: function (e, p, l, cb) {
+    cb({ ok: true, lists: ['Groceries'], listName: 'Groceries', state: loadState() });
+  },
   ensureAuth: ensureAuth,
-  authenticateAndListLists: function (e, p, cb) { cb(null, loadState(), [], ''); },
   getListItems: getListItems,
   updateItem: updateItem
 };
