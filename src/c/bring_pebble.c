@@ -207,7 +207,45 @@ static void send_add_item(const char *name) {
 // UI
 // ---------------------------------------------------------------------------
 
+// Message fonts from largest to smallest; show_message() picks the first one
+// whose wrapped text fits on screen.
+static const char *const MESSAGE_FONT_KEYS[] = {
+  FONT_KEY_GOTHIC_28_BOLD,
+  FONT_KEY_GOTHIC_24_BOLD,
+  FONT_KEY_GOTHIC_18_BOLD,
+  FONT_KEY_GOTHIC_14_BOLD,
+};
+#define MESSAGE_FONT_COUNT (int)(sizeof(MESSAGE_FONT_KEYS) / sizeof(MESSAGE_FONT_KEYS[0]))
+
+// Shows a full-screen message (loading, setup hint, errors) in the largest
+// font that fits, centered horizontally and vertically.
 static void show_message(const char *text) {
+  Layer *window_layer = window_get_root_layer(s_window);
+  GRect bounds = layer_get_bounds(window_layer);
+  // Round displays need a wider inset so text doesn't hit the curved edge.
+  int16_t h_inset = PBL_IF_ROUND_ELSE(bounds.size.w / 8, 6);
+  int16_t v_inset = PBL_IF_ROUND_ELSE(bounds.size.h / 10, 4);
+  GRect area = grect_inset(bounds, GEdgeInsets(v_inset, h_inset));
+
+  GFont font = NULL;
+  GSize size = GSizeZero;
+  for (int i = 0; i < MESSAGE_FONT_COUNT; i++) {
+    font = fonts_get_system_font(MESSAGE_FONT_KEYS[i]);
+    size = graphics_text_layout_get_content_size(text, font, area,
+                                                 GTextOverflowModeWordWrap, GTextAlignmentCenter);
+    if (size.h <= area.size.h) {
+      break;
+    }
+  }
+  // Text layout draws descenders a few pixels below the reported content
+  // height; give the frame extra room (it may spill into the inset margin).
+  int16_t h = size.h + 8;
+  // Gothic glyphs sit low in their line box; nudge up for optical centering.
+  GRect frame = GRect(area.origin.x, bounds.origin.y + (bounds.size.h - size.h) / 2 - 3,
+                      area.size.w, h);
+
+  layer_set_frame(text_layer_get_layer(s_message_layer), frame);
+  text_layer_set_font(s_message_layer, font);
   text_layer_set_text(s_message_layer, text);
   layer_set_hidden(text_layer_get_layer(s_message_layer), false);
   layer_set_hidden(menu_layer_get_layer(s_menu_layer), true);
