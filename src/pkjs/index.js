@@ -22,9 +22,72 @@ var ERR_LIST_NOT_FOUND = 5;
 
 var MAX_ITEMS = 80; // must match MAX_ITEMS in src/c/bring_pebble.c
 
+// The user has entered credentials. The list may still need to be resolved
+// (see resolveListThen).
 function isConfigured() {
   var s = BringApi.loadState();
-  return !!(s.email && s.password && s.listUuid);
+  return !!(s.email && s.password);
+}
+
+// Watch error code for a failed BringApi.checkAccount result.
+function errorCodeFor(result) {
+  switch (result.reason) {
+    case 'login': return ERR_LOGIN;
+    case 'no_lists': return ERR_NO_LISTS;
+    case 'list_not_found': return ERR_LIST_NOT_FOUND;
+    default: return ERR_CONNECT_BRING;
+  }
+}
+
+// Checks the saved credentials and list name. On success the session and the
+// resolved list are stored; on failure nothing is changed or removed. The
+// outcome is remembered for the settings page either way.
+function checkSavedSettings(callback) {
+  var saved = BringApi.loadState();
+  var wanted = BringApi.loadWantedListName();
+  BringApi.checkAccount(saved.email, saved.password, wanted, function (result) {
+    // The settings may have been changed while the request was running.
+    var now = BringApi.loadState();
+    if (now.email !== saved.email || now.password !== saved.password ||
+        BringApi.loadWantedListName() !== wanted) {
+      return;
+    }
+    if (result.ok) {
+      BringApi.saveState(result.state);
+    }
+    BringApi.saveLastCheck(checkRecord(result, saved.email, wanted, false));
+    callback(result);
+  });
+}
+
+function checkRecord(result, email, wantedListName, isTest) {
+  return {
+    ok: result.ok,
+    reason: result.reason || '',
+    lists: result.lists || [],
+    listName: result.listName || '',
+    wantedListName: wantedListName,
+    email: email,
+    test: isTest,
+    at: Date.now()
+  };
+}
+
+// Makes sure the saved list name has been resolved to a list, then calls
+// `next`. Otherwise (first sync after saving, or saving could not reach
+// Bring!) it resolves it now and reports problems to the watch.
+function resolveListThen(next) {
+  if (BringApi.loadState().listUuid) {
+    next();
+    return;
+  }
+  checkSavedSettings(function (result) {
+    if (!result.ok) {
+      sendError(errorCodeFor(result), result.reason === 'list_not_found' ? BringApi.loadWantedListName() : '');
+      return;
+    }
+    next();
+  });
 }
 
 function sendNotConfigured() {
@@ -77,17 +140,16 @@ function sendItemsThenDone(items, locale) {
 
 function doSync() {
   if (!isConfigured()) {
-    var configError = BringApi.loadConfigError();
-    if (configError) {
-      sendError(configError.code, configError.detail);
-    } else {
-      sendNotConfigured();
-    }
+    sendNotConfigured();
     return;
   }
+  resolveListThen(syncList);
+}
+
+function syncList() {
   BringApi.ensureAuth(function (authErr, state) {
     if (authErr) {
-      sendError(ERR_CONNECT_BRING);
+      sendError(BringApi.isLoginRejected(authErr) ? ERR_LOGIN : ERR_CONNECT_BRING);
       return;
     }
     BringApi.getListItems(state, function (err, items) {
@@ -110,6 +172,24 @@ function doSync() {
   });
 }
 
+// Runs `action(state)` with a valid session, resolving the list first if
+// needed. Errors go to the watch.
+function withAuth(action) {
+  if (!isConfigured()) {
+    sendNotConfigured();
+    return;
+  }
+  resolveListThen(function () {
+    BringApi.ensureAuth(function (authErr, state) {
+      if (authErr) {
+        sendError(BringApi.isLoginRejected(authErr) ? ERR_LOGIN : ERR_CONNECT_BRING);
+        return;
+      }
+      action(state);
+    });
+  });
+}
+
 Pebble.addEventListener('ready', function () {
   console.log('Bring! companion ready');
 });
@@ -128,16 +208,8 @@ Pebble.addEventListener('appmessage', function (e) {
   }
 
   if (payload.action === ACTION_TOGGLE_ITEM) {
-    if (!isConfigured()) {
-      sendNotConfigured();
-      return;
-    }
     var toggleOp = payload.itemDone ? 'TO_RECENTLY' : 'TO_PURCHASE';
-    BringApi.ensureAuth(function (authErr, state) {
-      if (authErr) {
-        sendError(ERR_CONNECT_BRING);
-        return;
-      }
+    withAuth(function (state) {
       BringApi.updateItem(state, payload.itemName, toggleOp, function () {
         // Re-sync regardless of success so the watch always reflects server state.
         doSync();
@@ -157,11 +229,7 @@ Pebble.addEventListener('appmessage', function (e) {
       doSync();
       return;
     }
-    BringApi.ensureAuth(function (authErr, state) {
-      if (authErr) {
-        sendError(ERR_CONNECT_BRING);
-        return;
-      }
+    withAuth(function (state) {
       BringApi.updateItem(state, name, 'TO_PURCHASE', function () {
         doSync();
       });
@@ -184,13 +252,32 @@ function currentWatchLocale() {
   return localStorage.getItem('bring_watchLocale') || '';
 }
 
-Pebble.addEventListener('showConfiguration', function () {
-  var current = BringApi.loadState();
-  Pebble.openURL(Config.buildCredentialsUrl({
-    email: current.email,
-    listName: current.listName,
-    locale: currentWatchLocale()
+// A check result is shown on the settings page if it is about what the page
+// shows: a check of the saved settings, or a test from the last few minutes
+// (in case the page could not be reopened with the result right away).
+var TEST_RESULT_MAX_AGE_MS = 10 * 60 * 1000;
+
+function openSettings(draft, check) {
+  var saved = BringApi.loadState();
+  if (!check) {
+    var last = BringApi.loadLastCheck();
+    if (last && (last.test ? Date.now() - last.at < TEST_RESULT_MAX_AGE_MS
+                           : last.email === saved.email)) {
+      check = last;
+    }
+  }
+  Pebble.openURL(Config.buildSettingsUrl({
+    email: draft ? draft.email : saved.email,
+    listName: draft ? draft.listName : BringApi.loadWantedListName(),
+    password: draft ? draft.password : '',
+    hasPassword: !!saved.password,
+    locale: currentWatchLocale(),
+    check: check
   }));
+}
+
+Pebble.addEventListener('showConfiguration', function () {
+  openSettings(null, null);
 });
 
 Pebble.addEventListener('webviewclosed', function (e) {
@@ -201,54 +288,35 @@ Pebble.addEventListener('webviewclosed', function (e) {
   if (!data) {
     return;
   }
-  var email = (data.email || '').trim();
-  var password = data.password || '';
-  var wantedListName = (data.listName || '').trim();
+  var email = String(data.email || '').trim();
+  var typedPassword = String(data.password || '');
+  var wantedListName = String(data.listName || '').trim();
+  // An empty password field means "keep the saved password".
+  var password = typedPassword || BringApi.loadState().password;
   if (!email || !password) {
     return;
   }
 
-  // Login + list lookup happens here in pkjs (native networking), not in
-  // the configuration webview, since Bring!'s API has no CORS headers and
-  // blocks requests coming from a browser/webview origin.
-  BringApi.authenticateAndListLists(email, password, function (err, state, lists, defaultListUuid) {
-    if (err || !lists || !lists.length) {
-      var code = err ? ERR_LOGIN : ERR_NO_LISTS;
-      BringApi.saveConfigError(code);
-      sendError(code); // reaches the watch if it happens to be open right now
+  if (data.action === 'test') {
+    // Checks the entered values without storing them, then shows the result
+    // on the settings page with the values still filled in.
+    BringApi.checkAccount(email, password, wantedListName, function (result) {
+      var check = checkRecord(result, email, wantedListName, true);
+      BringApi.saveLastCheck(check);
+      openSettings({ email: email, password: typedPassword, listName: wantedListName }, check);
+    });
+    return;
+  }
+
+  // Save: store first, so the settings are kept whatever happens next.
+  BringApi.saveCredentials(email, password, wantedListName);
+  checkSavedSettings(function (result) {
+    if (!result.ok) {
+      // Reaches the watch if it happens to be open right now; otherwise the
+      // next sync checks again and reports it.
+      sendError(errorCodeFor(result), result.reason === 'list_not_found' ? wantedListName : '');
       return;
     }
-
-    var chosen = null;
-    var i;
-    if (wantedListName) {
-      for (i = 0; i < lists.length; i++) {
-        if (lists[i].name.toLowerCase() === wantedListName.toLowerCase()) {
-          chosen = lists[i];
-          break;
-        }
-      }
-      if (!chosen) {
-        BringApi.saveConfigError(ERR_LIST_NOT_FOUND, wantedListName);
-        sendError(ERR_LIST_NOT_FOUND, wantedListName);
-        return;
-      }
-    } else {
-      for (i = 0; i < lists.length; i++) {
-        if (lists[i].listUuid === defaultListUuid) {
-          chosen = lists[i];
-          break;
-        }
-      }
-      if (!chosen) {
-        chosen = lists[0];
-      }
-    }
-
-    state.listUuid = chosen.listUuid;
-    state.listName = chosen.name;
-    BringApi.saveState(state);
-    BringApi.clearConfigError();
     doSync();
   });
 });

@@ -44,36 +44,58 @@ function loadState() {
   };
 }
 
-// Remembers why configuration last failed (as an error code the watch
-// localizes), so the watch can show a useful
-// message even if it wasn't open at the moment the phone-side login/list
-// lookup failed (Settings is edited from the phone, not necessarily with
-// the watchapp running).
-function saveConfigError(code, detail) {
-  localStorage.setItem('bring_configError', JSON.stringify({ code: code, detail: detail || '' }));
+// The list name the user typed in the settings ('' = the account's default
+// list). Older versions only stored the resolved name in bring_listName, which
+// the settings page used to prefill, so that is the fallback.
+function loadWantedListName() {
+  var wanted = localStorage.getItem('bring_wantedList');
+  return wanted !== null ? wanted : (localStorage.getItem('bring_listName') || '');
 }
 
-// Returns { code, detail } or null when there is no pending error.
-function loadConfigError() {
-  try {
-    var raw = localStorage.getItem('bring_configError');
-    if (!raw) {
-      return null;
-    }
-    try {
-      return JSON.parse(raw);
-    } catch (e) {
-      // Legacy value from before error codes: a plain text message. Show a
-      // generic error rather than silently reporting "not configured".
-      return { code: 0, detail: '' };
-    }
-  } catch (e2) {
-    return null;
+// Session data derived from the credentials. Dropped when the credentials
+// change, since it belongs to the old login (or the old account).
+var SESSION_KEYS = ['uuid', 'publicUuid', 'accessToken', 'refreshToken', 'tokenType',
+  'expiresAt', 'locale', 'country'];
+var LIST_KEYS = ['listUuid', 'listName'];
+
+function removeKeys(keys) {
+  for (var i = 0; i < keys.length; i++) {
+    localStorage.removeItem('bring_' + keys[i]);
   }
 }
 
-function clearConfigError() {
-  localStorage.removeItem('bring_configError');
+// Stores what the user entered in the settings. This is the only place the
+// credentials are written, and they are never removed: a failed login or
+// network error must not cost the user their settings. Derived data (tokens,
+// resolved list) is dropped only when the input it came from changed.
+function saveCredentials(email, password, wantedListName) {
+  var old = loadState();
+  var accountChanged = old.email.toLowerCase() !== email.toLowerCase() || old.password !== password;
+  var listChanged = loadWantedListName().toLowerCase() !== wantedListName.toLowerCase();
+  if (accountChanged) {
+    removeKeys(SESSION_KEYS);
+  }
+  if (accountChanged || listChanged) {
+    removeKeys(LIST_KEYS);
+  }
+  localStorage.setItem('bring_email', email);
+  localStorage.setItem('bring_password', password);
+  localStorage.setItem('bring_wantedList', wantedListName);
+  localStorage.removeItem('bring_configError'); // left over from older versions
+}
+
+// Result of the last account check, shown on the settings page:
+// { code, detail, lists: [names], listName, email, test, at }
+function saveLastCheck(check) {
+  localStorage.setItem('bring_lastCheck', JSON.stringify(check));
+}
+
+function loadLastCheck() {
+  try {
+    return JSON.parse(localStorage.getItem('bring_lastCheck') || 'null');
+  } catch (e) {
+    return null;
+  }
 }
 
 function saveState(state) {
@@ -128,14 +150,20 @@ function xhrRequest(method, url, headers, body, callback) {
       }
       callback(null, data, xhr.status);
     } else {
-      callback(new Error('HTTP ' + xhr.status), null, xhr.status);
+      var err = new Error('HTTP ' + xhr.status);
+      err.status = xhr.status;
+      callback(err, null, xhr.status);
     }
   };
   xhr.onerror = function () {
-    callback(new Error('network error'), null, 0);
+    var err = new Error('network error');
+    err.status = 0;
+    callback(err, null, 0);
   };
   xhr.ontimeout = function () {
-    callback(new Error('timeout'), null, 0);
+    var err = new Error('timeout');
+    err.status = 0;
+    callback(err, null, 0);
   };
   xhr.open(method, url, true);
   var k;
@@ -184,7 +212,7 @@ function fetchUserLocale(state, callback) {
 // official app does) so catalog items can be shown translated instead of in
 // German. Never fails the caller — if this can't be determined, callers just
 // fall back to BRING_DEFAULT_LOCALE (untranslated) for this round.
-function applyUserLocale(state, callback) {
+function applyUserLocale(state, callback, persist) {
   if (state.locale && state.country) {
     callback(state);
     return;
@@ -196,7 +224,9 @@ function applyUserLocale(state, callback) {
     }
     state.country = userLocale.country || DEFAULT_COUNTRY;
     state.locale = resolveLocale(userLocale.language || 'de', state.country);
-    saveState(state);
+    if (persist !== false) {
+      saveState(state);
+    }
     callback(state);
   });
 }
@@ -301,14 +331,44 @@ function loadLists(state, callback) {
   });
 }
 
-// Used by the configuration flow: logs in with fresh credentials, then lists
-// the account's shopping lists so the user can pick one. Runs entirely in
-// PebbleKit JS (not the configuration webview) because Bring!'s API has no
-// CORS headers and rejects browser-origin requests.
-function authenticateAndListLists(email, password, callback) {
+// Bring! answers a wrong email or password with a 4xx; anything else
+// (status 0 = no connection/timeout, 5xx) is a connection problem.
+function isLoginRejected(err) {
+  return !!(err && err.status >= 400 && err.status < 500);
+}
+
+// Picks the list to show: the one named `wanted` (case-insensitive), or the
+// account's default list when `wanted` is empty. null when not found.
+function pickList(lists, wanted, defaultListUuid) {
+  var i;
+  if (wanted) {
+    for (i = 0; i < lists.length; i++) {
+      if (String(lists[i].name).toLowerCase() === wanted.toLowerCase()) {
+        return lists[i];
+      }
+    }
+    return null;
+  }
+  for (i = 0; i < lists.length; i++) {
+    if (lists[i].listUuid === defaultListUuid) {
+      return lists[i];
+    }
+  }
+  return lists[0] || null;
+}
+
+// Logs in with the given credentials and looks up the list, without storing
+// anything. Used by "Test connection", by "Save" and by the sync when the
+// list has not been resolved yet. Runs in PebbleKit JS (not the settings
+// webview) because Bring!'s API rejects browser-origin (CORS) requests.
+//
+// callback(result): result.ok, result.reason ('login' | 'connect' |
+// 'no_lists' | 'list_not_found'), result.lists (names), and when ok,
+// result.state (session + listUuid/listName, ready for saveState).
+function checkAccount(email, password, wantedListName, callback) {
   login(email, password, function (err, data) {
     if (err || !data || !data.access_token) {
-      callback(err || new Error('login failed'));
+      callback({ ok: false, reason: isLoginRejected(err) ? 'login' : 'connect', lists: [] });
       return;
     }
     var state = {
@@ -324,12 +384,24 @@ function authenticateAndListLists(email, password, callback) {
     applyUserLocale(state, function (state2) {
       loadLists(state2, function (err2, lists) {
         if (err2) {
-          callback(err2);
+          callback({ ok: false, reason: 'connect', lists: [] });
           return;
         }
-        callback(null, state2, lists, data.bringListUUID);
+        var names = lists.map(function (l) { return String(l.name); });
+        if (!lists.length) {
+          callback({ ok: false, reason: 'no_lists', lists: names });
+          return;
+        }
+        var chosen = pickList(lists, wantedListName, data.bringListUUID);
+        if (!chosen) {
+          callback({ ok: false, reason: 'list_not_found', lists: names });
+          return;
+        }
+        state2.listUuid = chosen.listUuid;
+        state2.listName = String(chosen.name);
+        callback({ ok: true, lists: names, listName: state2.listName, state: state2 });
       });
-    });
+    }, false);
   });
 }
 
@@ -390,11 +462,14 @@ module.exports = {
   BRING_DEFAULT_LOCALE: BRING_DEFAULT_LOCALE,
   loadState: loadState,
   saveState: saveState,
-  saveConfigError: saveConfigError,
-  loadConfigError: loadConfigError,
-  clearConfigError: clearConfigError,
+  loadWantedListName: loadWantedListName,
+  saveCredentials: saveCredentials,
+  saveLastCheck: saveLastCheck,
+  loadLastCheck: loadLastCheck,
+  isLoginRejected: isLoginRejected,
+  pickList: pickList,
+  checkAccount: checkAccount,
   ensureAuth: ensureAuth,
-  authenticateAndListLists: authenticateAndListLists,
   getListItems: getListItems,
   updateItem: updateItem
 };
