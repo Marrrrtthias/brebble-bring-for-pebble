@@ -292,11 +292,13 @@ static void dictation_session_callback(DictationSession *session, DictationSessi
 // MenuLayer callbacks
 //
 // Section 0 has a single "+ Add item" row, drawn by the system. Section 1
-// lists the current Bring! items as compact one-line rows (icon + name);
-// purchased items are greyed out and struck through. On round watches the
-// focused item row is a bit taller than the others (the MenuLayer only lays
-// out a taller selected row correctly in its center-focused mode, which is the
-// default on round and not used on rectangular watches).
+// lists the current Bring! items (icon + name); purchased items are greyed out
+// and struck through. Item rows are as tall as the rows of the system app
+// launcher, which leaves room for a second, smaller line under the name. On
+// round watches the focused item row is taller than the others, as in the
+// launcher (the MenuLayer only lays out a taller selected row correctly in its
+// center-focused mode, which is the default on round and not used on
+// rectangular watches).
 // ---------------------------------------------------------------------------
 
 // The system's default cell height for apps, kept for the "+ Add item" row.
@@ -311,8 +313,17 @@ static void dictation_session_callback(DictationSession *session, DictationSessi
 #define ICON_TEXT_GAP 5
 #endif
 
-#define ITEM_ROW_HEIGHT PBL_IF_ROUND_ELSE(34, 32)
-#define ITEM_ROW_FOCUSED_HEIGHT PBL_IF_ROUND_ELSE(46, ITEM_ROW_HEIGHT)
+// Item rows use the cell heights of the system app launcher (PebbleOS
+// shell/system_theme_style.c): "large" content size on Time 2 / Round 2,
+// "medium" on the others. The category icons in resources/images are sized
+// to fit these rows (store/make_category_icons.py).
+#if PBL_DISPLAY_HEIGHT >= 200
+#define ITEM_ROW_HEIGHT PBL_IF_ROUND_ELSE(45, 50)
+#define ITEM_ROW_FOCUSED_HEIGHT PBL_IF_ROUND_ELSE(55, ITEM_ROW_HEIGHT)
+#else
+#define ITEM_ROW_HEIGHT PBL_IF_ROUND_ELSE(38, 42)
+#define ITEM_ROW_FOCUSED_HEIGHT PBL_IF_ROUND_ELSE(52, ITEM_ROW_HEIGHT)
+#endif
 
 static int16_t menu_get_cell_height_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *context) {
   if (cell_index->section == 0) {
@@ -453,8 +464,8 @@ static void marquee_restart(void) {
 #define ROW_HIGHLIGHT_BG GColorBlack
 #define ROW_HIGHLIGHT_FG GColorWhite
 
-// One-line item row: icon + name, left-aligned like the system cells on
-// rectangular watches, centred as a group on round ones.
+// Item row: icon + name, vertically centred in the row; left-aligned like the
+// system cells on rectangular watches, centred as a group on round ones.
 static void draw_item_row(GContext *ctx, const Layer *cell_layer, const BringItem *item) {
   GRect bounds = layer_get_bounds(cell_layer);
   bool highlighted = menu_cell_layer_is_highlighted(cell_layer);
