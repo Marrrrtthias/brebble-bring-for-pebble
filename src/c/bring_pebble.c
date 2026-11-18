@@ -603,6 +603,11 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
 
   switch ((BringAction)action_tuple->value->int32) {
     case ACTION_SYNC_START:
+      // The phone is answering: a retry would only start a second stream.
+      if (s_retry_timer) {
+        app_timer_cancel(s_retry_timer);
+        s_retry_timer = NULL;
+      }
       s_item_count = 0;
       break;
     case ACTION_SYNC_ITEM: {
