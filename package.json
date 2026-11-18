@@ -38,7 +38,8 @@
       "itemIcon",
       "errorMsg",
       "errorCode",
-      "locale"
+      "locale",
+      "touchDisabled"
     ],
     "resources": {
       "media": [

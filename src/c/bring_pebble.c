@@ -542,10 +542,52 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
 }
 
 // ---------------------------------------------------------------------------
+// Touch setting (watches with a touchscreen only)
+// ---------------------------------------------------------------------------
+
+#if defined(PBL_TOUCH)
+// The user can turn touch off in the settings page (sent by the phone as
+// touchDisabled), so a stray tap can't check off an item. Kept in persistent
+// storage so it applies right away on the next start. Default: touch on.
+#define PERSIST_KEY_TOUCH_DISABLED 1
+
+static bool s_touch_disabled;
+
+static void load_touch_setting(void) {
+  s_touch_disabled = persist_exists(PERSIST_KEY_TOUCH_DISABLED) &&
+                     persist_read_bool(PERSIST_KEY_TOUCH_DISABLED);
+}
+
+// Tapping a row fires the same select_click as pressing SELECT, unless the
+// user has disabled touch.
+static void apply_touch_setting(void) {
+  app_touch_navigation_enable(!s_touch_disabled);
+}
+
+static void handle_touch_setting(DictionaryIterator *iterator) {
+  Tuple *touch_t = dict_find(iterator, MESSAGE_KEY_touchDisabled);
+  if (!touch_t) {
+    return;
+  }
+  bool disabled = touch_t->value->int32 != 0;
+  if (disabled != s_touch_disabled) {
+    s_touch_disabled = disabled;
+    persist_write_bool(PERSIST_KEY_TOUCH_DISABLED, disabled);
+    apply_touch_setting();
+  }
+}
+#endif
+
+// ---------------------------------------------------------------------------
 // AppMessage: incoming
 // ---------------------------------------------------------------------------
 
 static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
+#if defined(PBL_TOUCH)
+  // Settings may come with any message, or on their own without an action.
+  handle_touch_setting(iterator);
+#endif
+
   Tuple *action_tuple = dict_find(iterator, MESSAGE_KEY_action);
   if (!action_tuple) {
     return;
@@ -635,10 +677,10 @@ static void window_load(Window *window) {
   menu_layer_set_click_config_onto_window(s_menu_layer, window);
   layer_add_child(window_layer, menu_layer_get_layer(s_menu_layer));
 
-  // On touchscreen hardware (Pebble Time 2 / Pebble Round 2), tapping a row
-  // now fires the same select_click as pressing the SELECT button — no-op
-  // on button-only platforms.
-  app_touch_navigation_enable(true);
+#if defined(PBL_TOUCH)
+  // Touchscreen hardware (Pebble Time 2 / Pebble Round 2) only.
+  apply_touch_setting();
+#endif
 
   s_message_layer = text_layer_create(bounds);
   text_layer_set_text_alignment(s_message_layer, GTextAlignmentCenter);
@@ -687,6 +729,9 @@ static void window_unload(Window *window) {
 
 static void init(void) {
   detect_language();
+#if defined(PBL_TOUCH)
+  load_touch_setting();
+#endif
   s_window = window_create();
   window_set_window_handlers(s_window, (WindowHandlers) {
     .load = window_load,

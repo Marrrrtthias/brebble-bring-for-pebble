@@ -143,3 +143,48 @@ test('testing stores nothing and reopens the page with the result', async functi
   assert.ok(page.indexOf('data-list="Work"') >= 0);
   assert.ok(page.indexOf('secret') < 0);
 });
+
+function touchMessages() {
+  return sent.filter(function (m) { return 'touchDisabled' in m; });
+}
+
+test('the disable-touch setting is saved and sent to the watch', async function () {
+  setup();
+  closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '', touchDisabled: true });
+  await settle();
+  assert.strictEqual(localStorage.getItem('bring_touchDisabled'), '1');
+  assert.deepStrictEqual(touchMessages(), [{ touchDisabled: 1 }]);
+  assert.strictEqual(localStorage.getItem('bring_password'), 'secret');
+
+  // The settings page shows it again.
+  listeners.showConfiguration();
+  assert.ok(opened[0].indexOf('id="touchDisabled" type="checkbox" checked') >= 0);
+
+  // Every sync request from the watch also gets the current setting.
+  sent = [];
+  listeners.appmessage({ payload: { action: 0 } });
+  await settle();
+  assert.deepStrictEqual(touchMessages(), [{ touchDisabled: 1 }]);
+
+  // Turning it back on keeps the saved password.
+  sent = [];
+  closeSettings({ action: 'save', email: 'a@example.com', password: '', listName: '', touchDisabled: false });
+  await settle();
+  assert.strictEqual(localStorage.getItem('bring_touchDisabled'), '0');
+  assert.deepStrictEqual(touchMessages(), [{ touchDisabled: 0 }]);
+  assert.strictEqual(localStorage.getItem('bring_password'), 'secret');
+});
+
+test('touch stays on by default, and a test does not save the setting', async function () {
+  setup();
+  sent = [];
+  listeners.appmessage({ payload: { action: 0 } });
+  await settle();
+  assert.deepStrictEqual(touchMessages(), [{ touchDisabled: 0 }]);
+
+  closeSettings({ action: 'test', email: 'a@example.com', password: 'secret', listName: '', touchDisabled: true });
+  await settle();
+  assert.strictEqual(localStorage.getItem('bring_touchDisabled'), null);
+  // The reopened page keeps the box ticked.
+  assert.ok(opened[0].indexOf('id="touchDisabled" type="checkbox" checked') >= 0);
+});
