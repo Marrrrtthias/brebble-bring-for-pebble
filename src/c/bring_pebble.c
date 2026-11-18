@@ -4,7 +4,7 @@
 // Must match the action values used in src/pkjs/index.js
 typedef enum {
   ACTION_REQUEST_SYNC   = 0, // watch -> phone: "send me the current list"
-  ACTION_SYNC_ITEM      = 1, // phone -> watch: one item (itemIndex, itemName, itemDone)
+  ACTION_SYNC_ITEM      = 1, // phone -> watch: one item (itemIndex, itemName, itemDone, itemIcon, itemDetail)
   ACTION_SYNC_DONE      = 2, // phone -> watch: end of the item stream
   ACTION_TOGGLE_ITEM    = 3, // watch -> phone: item at itemIndex now has itemDone
   ACTION_ADD_ITEM       = 4, // watch -> phone: add itemName to the list
@@ -26,6 +26,9 @@ typedef enum {
 
 #define MAX_ITEMS 80
 #define MAX_NAME_LEN 48
+// Item details ("500 ml"), shown as a subtitle. The phone sends at most
+// MAX_DETAIL characters (src/pkjs/index.js); longer UTF-8 text is cut here.
+#define MAX_DETAIL_LEN 40
 #define DICTATION_BUFFER_SIZE 128
 
 // Must match the category order in src/pkjs/categorize.js
@@ -43,6 +46,7 @@ static const uint32_t CATEGORY_RESOURCE_IDS[ICON_CATEGORY_COUNT] = {
 
 typedef struct {
   char name[MAX_NAME_LEN];
+  char detail[MAX_DETAIL_LEN]; // "" when the item has no details
   bool done;
   uint8_t icon;
 } BringItem;
@@ -373,35 +377,66 @@ static void menu_draw_header_callback(GContext *ctx, const Layer *cell_layer, ui
 typedef struct {
   GBitmap *icon;
   GSize icon_size;
-  int16_t text_offset; // from the icon's left edge to the text
-  int16_t max_text_w;  // width of the text column
-  int16_t full_text_w; // width of the whole name on one line
+  int16_t text_offset;   // from the icon's left edge to the text
+  int16_t max_text_w;    // width of the text column
+  int16_t full_text_w;   // width of the whole name on one line
+  bool show_detail;      // the details are drawn as a second line
+  int16_t full_detail_w; // width of the whole details on one line (0 when not shown)
 } ItemRowLayout;
 
 // Wide enough for any MAX_NAME_LEN name on one line.
 #define TEXT_MEASURE_WIDTH 2000
 
+// Item details are drawn as a subtitle in a smaller font, as in the system app
+// launcher: Gothic 18 under the name on Time 2 / Round 2, Gothic 14 elsewhere.
+// The name stays in Gothic 24 Bold, which the launcher also uses for titles on
+// the large watches; the smaller ones fit it with Gothic 14 below.
+#if PBL_DISPLAY_HEIGHT >= 200
+#define DETAIL_FONT_KEY FONT_KEY_GOTHIC_18
+#define DETAIL_FONT_SIZE 18
+#else
+#define DETAIL_FONT_KEY FONT_KEY_GOTHIC_14
+#define DETAIL_FONT_SIZE 14
+#endif
+
 static GFont item_font(void) {
   return fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD); // the system menu cell title font
 }
 
-static ItemRowLayout item_row_layout(const BringItem *item, int16_t cell_w) {
+static GFont detail_font(void) {
+  return fonts_get_system_font(DETAIL_FONT_KEY);
+}
+
+static int16_t text_width(const char *text, GFont font) {
+  return graphics_text_layout_get_content_size(text, font, GRect(0, 0, TEXT_MEASURE_WIDTH, 30),
+                                               GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft).w;
+}
+
+// `highlighted`: whether the row is the selected one. On round watches only
+// the selected (taller) row shows the details, as the launcher does with
+// subtitles; the other rows are too short for two lines.
+static ItemRowLayout item_row_layout(const BringItem *item, int16_t cell_w, bool highlighted) {
   ItemRowLayout l;
   l.icon = (item->icon < ICON_CATEGORY_COUNT) ? s_category_icons[item->icon] : NULL;
   l.icon_size = l.icon ? gbitmap_get_bounds(l.icon).size : GSize(0, 0);
   l.text_offset = l.icon ? l.icon_size.w + ICON_TEXT_GAP : 0;
   // On round, rows above and below the centre are narrower, so leave more room at the sides.
   l.max_text_w = PBL_IF_ROUND_ELSE(cell_w * 4 / 5, cell_w - 2 * ROW_INSET) - l.text_offset;
-  l.full_text_w = graphics_text_layout_get_content_size(item->name, item_font(),
-                                                        GRect(0, 0, TEXT_MEASURE_WIDTH, 30),
-                                                        GTextOverflowModeTrailingEllipsis,
-                                                        GTextAlignmentLeft).w;
+  l.full_text_w = text_width(item->name, item_font());
+  l.show_detail = item->detail[0] != '\0' && PBL_IF_ROUND_ELSE(highlighted, true);
+  l.full_detail_w = l.show_detail ? text_width(item->detail, detail_font()) : 0;
   return l;
 }
 
+// How far a line of text `full_w` wide has to scroll to show its end.
+static int16_t overflow(int16_t full_w, int16_t max_w) {
+  return full_w > max_w ? full_w - max_w : 0;
+}
+
 // ---------------------------------------------------------------------------
-// Marquee: the highlighted item scrolls horizontally when its name does not
-// fit, so it can be read in full. Scrolling starts MARQUEE_START_DELAY_MS
+// Marquee: the highlighted item scrolls horizontally when its name or details
+// do not fit, so they can be read in full; both lines scroll together, and the
+// shorter one stops at its end. Scrolling starts MARQUEE_START_DELAY_MS
 // after the item was highlighted, pauses at the end, jumps back to the start
 // and repeats. Only the highlighted row ever scrolls; the others keep their
 // ellipsis. The highlighted row also shows the ellipsis while at offset 0.
@@ -415,8 +450,8 @@ static ItemRowLayout item_row_layout(const BringItem *item, int16_t cell_w) {
 static AppTimer *s_marquee_timer;
 static int16_t s_marquee_offset = 0;
 
-// How far the highlighted item's name has to scroll to show its end (0 when
-// it fits or no item is highlighted).
+// How far the highlighted item's name or details (whichever is longer) have
+// to scroll to show their end (0 when both fit or no item is highlighted).
 static int16_t selected_item_overflow(void) {
   if (s_state != STATE_READY || !s_menu_layer) {
     return 0;
@@ -426,8 +461,10 @@ static int16_t selected_item_overflow(void) {
     return 0;
   }
   int16_t cell_w = layer_get_bounds(menu_layer_get_layer(s_menu_layer)).size.w;
-  ItemRowLayout l = item_row_layout(&s_items[index.row], cell_w);
-  return l.full_text_w > l.max_text_w ? l.full_text_w - l.max_text_w : 0;
+  ItemRowLayout l = item_row_layout(&s_items[index.row], cell_w, true);
+  int16_t name_overflow = overflow(l.full_text_w, l.max_text_w);
+  int16_t detail_overflow = overflow(l.full_detail_w, l.max_text_w);
+  return name_overflow > detail_overflow ? name_overflow : detail_overflow;
 }
 
 static void marquee_timer_callback(void *data) {
@@ -470,17 +507,61 @@ static void marquee_restart(void) {
 #define ROW_HIGHLIGHT_BG GColorBlack
 #define ROW_HIGHLIGHT_FG GColorWhite
 
-// Item row: icon + name, vertically centred in the row; left-aligned like the
-// system cells on rectangular watches, centred as a group on round ones.
+// Vertical metrics of the item fonts, tuned in the emulator: where the
+// capitals start inside the text box and how tall they are. Used to centre
+// the visible text, not the font's line box, in the row.
+#define TITLE_CAP_TOP 8
+#define TITLE_CAP_H 16
+#define TITLE_STRIKE_Y 17 // middle of the lower-case letters
+#if PBL_DISPLAY_HEIGHT >= 200
+#define DETAIL_CAP_TOP 6
+#define DETAIL_CAP_H 12
+#define LINE_GAP 5
+#else
+#define DETAIL_CAP_TOP 5
+#define DETAIL_CAP_H 9
+#define LINE_GAP 4
+#endif
+
+// One line of text in the text column, scrolled left by `scroll` (clamped to
+// the line's own overflow, so a shorter line stops early) when highlighted.
+static void draw_text_line(GContext *ctx, const char *text, GFont font, int16_t text_x, int16_t y,
+                           int16_t full_w, int16_t max_w, int16_t box_h, int16_t scroll) {
+  int16_t line_overflow = overflow(full_w, max_w);
+  if (scroll > line_overflow) {
+    scroll = line_overflow;
+  }
+  GRect box;
+  if (scroll > 0) {
+    // The whole text, shifted left; a little slack so it is never ellipsized.
+    box = GRect(text_x - scroll, y, full_w + 8, box_h);
+  } else {
+    box = GRect(text_x, y, full_w < max_w ? full_w : max_w, box_h);
+  }
+  graphics_draw_text(ctx, text, font, box, GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+}
+
+// Item row: icon + name, with the item's details as a smaller second line
+// below the name when it has any; the text is vertically centred in the row.
+// Left-aligned like the system cells on rectangular watches, centred as a
+// group on round ones.
 static void draw_item_row(GContext *ctx, const Layer *cell_layer, const BringItem *item) {
   GRect bounds = layer_get_bounds(cell_layer);
   bool highlighted = menu_cell_layer_is_highlighted(cell_layer);
-  ItemRowLayout l = item_row_layout(item, bounds.size.w);
+  ItemRowLayout l = item_row_layout(item, bounds.size.w, highlighted);
 
-  int16_t max_offset = l.full_text_w > l.max_text_w ? l.full_text_w - l.max_text_w : 0;
-  int16_t scroll = highlighted ? (s_marquee_offset < max_offset ? s_marquee_offset : max_offset) : 0;
-  int16_t text_w = l.full_text_w < l.max_text_w ? l.full_text_w : l.max_text_w;
-  int16_t x = PBL_IF_ROUND_ELSE((bounds.size.w - l.text_offset - text_w) / 2, ROW_INSET);
+  int16_t name_overflow = overflow(l.full_text_w, l.max_text_w);
+  int16_t detail_overflow = overflow(l.full_detail_w, l.max_text_w);
+  int16_t max_overflow = name_overflow > detail_overflow ? name_overflow : detail_overflow;
+  int16_t scroll = highlighted ? (s_marquee_offset < max_overflow ? s_marquee_offset : max_overflow) : 0;
+  int16_t name_w = l.full_text_w < l.max_text_w ? l.full_text_w : l.max_text_w;
+#if PBL_ROUND
+  int16_t detail_w = l.full_detail_w < l.max_text_w ? l.full_detail_w : l.max_text_w;
+  int16_t text_w = name_w > detail_w ? name_w : detail_w; // the wider line centres the group
+  int16_t x = (bounds.size.w - l.text_offset - text_w) / 2;
+#else
+  int16_t x = ROW_INSET;
+#endif
   int16_t text_x = x + l.text_offset;
 
   if (item->done) {
@@ -490,22 +571,23 @@ static void draw_item_row(GContext *ctx, const Layer *cell_layer, const BringIte
     graphics_context_set_stroke_color(ctx, grey);
   }
 
-  // Gothic 24 leaves space above its glyphs; shift the box up so the text is centred.
-  int16_t text_y = (bounds.size.h - 24) / 2 - 4;
-  GRect text_box;
-  if (scroll > 0) {
-    // The whole name, shifted left; a little slack so it is never ellipsized.
-    text_box = GRect(text_x - scroll, text_y, l.full_text_w + 8, 30);
-  } else {
-    text_box = GRect(text_x, text_y, text_w, 30);
+  int16_t block_h = l.show_detail ? TITLE_CAP_H + LINE_GAP + DETAIL_CAP_H : TITLE_CAP_H;
+  int16_t top = (bounds.size.h - block_h) / 2;
+  int16_t name_y = top - TITLE_CAP_TOP;
+  draw_text_line(ctx, item->name, item_font(), text_x, name_y, l.full_text_w, l.max_text_w, 30, scroll);
+  if (l.show_detail) {
+    int16_t detail_y = top + TITLE_CAP_H + LINE_GAP - DETAIL_CAP_TOP;
+    draw_text_line(ctx, item->detail, detail_font(), text_x, detail_y, l.full_detail_w, l.max_text_w,
+                   DETAIL_FONT_SIZE + 6, scroll);
   }
-  graphics_draw_text(ctx, item->name, item_font(), text_box, GTextOverflowModeTrailingEllipsis,
-                     GTextAlignmentLeft, NULL);
 
   if (item->done) {
-    int16_t y = bounds.size.h / 2 + 1;
-    int16_t line_w = scroll > 0 ? l.full_text_w : text_w;
-    graphics_draw_line(ctx, GPoint(text_box.origin.x, y), GPoint(text_box.origin.x + line_w, y));
+    // Only the name is struck through; the details stay readable in grey.
+    int16_t y = name_y + TITLE_STRIKE_Y;
+    int16_t name_scroll = scroll < name_overflow ? scroll : name_overflow;
+    int16_t line_x = text_x - name_scroll;
+    int16_t line_w = name_scroll > 0 ? l.full_text_w : name_w;
+    graphics_draw_line(ctx, GPoint(line_x, y), GPoint(line_x + line_w, y));
   }
 
   if (scroll > 0) {
@@ -678,6 +760,13 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
       strncpy(s_items[idx].name, name_t->value->cstring, MAX_NAME_LEN - 1);
       s_items[idx].name[MAX_NAME_LEN - 1] = '\0';
       s_items[idx].done = done_t->value->int32 != 0;
+      Tuple *detail_t = dict_find(iterator, MESSAGE_KEY_itemDetail);
+      s_items[idx].detail[0] = '\0';
+      if (detail_t && detail_t->type == TUPLE_CSTRING) {
+        strncpy(s_items[idx].detail, detail_t->value->cstring, MAX_DETAIL_LEN - 1);
+        s_items[idx].detail[MAX_DETAIL_LEN - 1] = '\0';
+        truncate_utf8_in_place(s_items[idx].detail);
+      }
       s_items[idx].icon = 0;
       if (icon_t) {
         int icon = (int)icon_t->value->int32;

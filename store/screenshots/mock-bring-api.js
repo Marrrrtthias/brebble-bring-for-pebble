@@ -3,8 +3,14 @@
 // serves a fixed demo shopping list, so no Bring! account or network is needed.
 var BRING_DEFAULT_LOCALE = 'en-US';
 
-var PURCHASE = ['Milk', 'Bread', 'Tomatoes', 'Chicken breast', 'Apple juice', 'Dish soap', 'Cheese', 'Bananas'];
-var RECENTLY = ['Eggs', 'Butter'];
+// [name, details]
+var PURCHASE = [['Milk', '2 l, lactose-free'], ['Bread', ''], ['Tomatoes', '500 g'], ['Chicken breast', ''],
+  ['Apple juice', '1 l'], ['Dish soap', ''], ['Cheese', 'Gouda'], ['Bananas', '']];
+var RECENTLY = [['Eggs', '10'], ['Butter', '']];
+
+function toEntries(items) {
+  return items.map(function (i) { return { itemId: i[0], specification: i[1] }; });
+}
 
 function loadState() {
   return { email: 'demo@example.com', password: 'demo', listUuid: 'demo', listName: 'Groceries', locale: 'en-US' };
@@ -14,12 +20,12 @@ function ensureAuth(cb) { cb(null, loadState()); }
 
 function getListItems(state, cb) {
   cb(null, {
-    purchase: PURCHASE.map(function (n) { return { itemId: n }; }),
-    recently: RECENTLY.map(function (n) { return { itemId: n }; })
+    purchase: toEntries(PURCHASE),
+    recently: toEntries(RECENTLY)
   });
 }
 
-function updateItem(state, name, op, cb) { cb(null); }
+function updateItem(state, name, op, spec, cb) { cb(null); }
 function noop() {}
 
 module.exports = {
