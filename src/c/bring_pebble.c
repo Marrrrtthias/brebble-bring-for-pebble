@@ -352,7 +352,7 @@ static ItemRowLayout item_row_layout(const BringItem *item, int16_t cell_w) {
 // ellipsis. The highlighted row also shows the ellipsis while at offset 0.
 // ---------------------------------------------------------------------------
 
-#define MARQUEE_START_DELAY_MS 500
+#define MARQUEE_START_DELAY_MS 1000
 #define MARQUEE_FRAME_MS 50
 #define MARQUEE_STEP_PX 2
 #define MARQUEE_END_PAUSE_MS 1000
