@@ -44,8 +44,9 @@ test('assignSections prefers the user-assigned section over the catalog', functi
 });
 
 test('assignSections ignores inherited object keys', function () {
-  var list = [{ itemId: 'constructor' }, { itemId: 'toString' }];
-  BringApi.assignSections(list, {}, {});
+  var list = [{ itemId: 'constructor' }, { itemId: 'toString' }, { itemId: 'hasOwnProperty' }];
+  BringApi.assignSections(list, { hasOwnProperty: 'Tierbedarf' }, {});
   assert.strictEqual(list[0].sectionId, null);
   assert.strictEqual(list[1].sectionId, null);
+  assert.strictEqual(list[2].sectionId, 'Tierbedarf');
 });

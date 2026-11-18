@@ -338,8 +338,8 @@ function assignSections(list, userSections, catalogSections) {
   for (i = 0; i < list.length; i++) {
     if (!list[i]) { continue; }
     id = list[i].itemId;
-    list[i].sectionId = (userSections.hasOwnProperty(id) && userSections[id]) ||
-      (catalogSections.hasOwnProperty(id) && catalogSections[id]) || null;
+    list[i].sectionId = (Object.prototype.hasOwnProperty.call(userSections, id) && userSections[id]) ||
+      (Object.prototype.hasOwnProperty.call(catalogSections, id) && catalogSections[id]) || null;
   }
 }
 
