@@ -11,7 +11,8 @@
 //   'save' - PebbleKit JS stores the values right away (they are kept even if
 //            the following check fails), checks them and syncs the watch.
 // An empty password means "keep the saved password". The saved password is
-// never put into the page.
+// never put into the page. `touchDisabled` (boolean) is the watch setting that
+// turns off touch input on watches with a touchscreen.
 
 var Locale = require('./locale');
 
@@ -39,7 +40,10 @@ var TEXTS = {
     errConnect: 'Could not reach Bring!. Check the phone’s internet connection and try again.',
     errNoLists: 'This Bring! account has no lists.',
     errListNotFound: 'This account has no list named “%s”.',
-    yourLists: 'Your lists (tap to pick one):'
+    yourLists: 'Your lists (tap to pick one):',
+    watchSection: 'Watch',
+    disableTouch: 'Disable touch',
+    disableTouchHint: 'For watches with a touchscreen: taps no longer check off items by accident. Use the buttons instead.'
   },
   es: {
     title: 'Ajustes de Brebble',
@@ -64,7 +68,10 @@ var TEXTS = {
     errConnect: 'No se pudo conectar con Bring!. Revisa la conexión a internet del teléfono e inténtalo de nuevo.',
     errNoLists: 'Esta cuenta de Bring! no tiene listas.',
     errListNotFound: 'Esta cuenta no tiene ninguna lista llamada «%s».',
-    yourLists: 'Tus listas (pulsa para elegir una):'
+    yourLists: 'Tus listas (pulsa para elegir una):',
+    watchSection: 'Reloj',
+    disableTouch: 'Desactivar el táctil',
+    disableTouchHint: 'Para relojes con pantalla táctil: tocar ya no marca artículos por error. Usa los botones.'
   },
   de: {
     title: 'Brebble-Einstellungen',
@@ -89,7 +96,10 @@ var TEXTS = {
     errConnect: 'Bring! ist nicht erreichbar. Prüfe die Internetverbindung des Handys und versuche es erneut.',
     errNoLists: 'Dieses Bring!-Konto hat keine Listen.',
     errListNotFound: 'In diesem Konto gibt es keine Liste namens „%s“.',
-    yourLists: 'Deine Listen (zum Auswählen antippen):'
+    yourLists: 'Deine Listen (zum Auswählen antippen):',
+    watchSection: 'Uhr',
+    disableTouch: 'Touch deaktivieren',
+    disableTouchHint: 'Für Uhren mit Touchscreen: Antippen hakt keine Artikel mehr versehentlich ab. Nutze stattdessen die Tasten.'
   },
   fr: {
     title: 'Paramètres Brebble',
@@ -114,7 +124,10 @@ var TEXTS = {
     errConnect: 'Impossible de joindre Bring!. Vérifiez la connexion internet du téléphone et réessayez.',
     errNoLists: 'Ce compte Bring! n’a aucune liste.',
     errListNotFound: 'Ce compte n’a aucune liste nommée « %s ».',
-    yourLists: 'Vos listes (appuyez pour en choisir une) :'
+    yourLists: 'Vos listes (appuyez pour en choisir une) :',
+    watchSection: 'Montre',
+    disableTouch: 'Désactiver le tactile',
+    disableTouchHint: 'Pour les montres à écran tactile : un appui ne coche plus d’article par erreur. Utilisez les boutons.'
   },
   it: {
     title: 'Impostazioni di Brebble',
@@ -139,7 +152,10 @@ var TEXTS = {
     errConnect: 'Impossibile raggiungere Bring!. Controlla la connessione internet del telefono e riprova.',
     errNoLists: 'Questo account Bring! non ha liste.',
     errListNotFound: 'Questo account non ha nessuna lista chiamata «%s».',
-    yourLists: 'Le tue liste (tocca per sceglierne una):'
+    yourLists: 'Le tue liste (tocca per sceglierne una):',
+    watchSection: 'Orologio',
+    disableTouch: 'Disattiva il touch',
+    disableTouchHint: 'Per orologi con touchscreen: un tocco non spunta più gli articoli per sbaglio. Usa i pulsanti.'
   },
   pt: {
     title: 'Configurações do Brebble',
@@ -164,7 +180,10 @@ var TEXTS = {
     errConnect: 'Não foi possível acessar o Bring!. Verifique a conexão com a internet do telefone e tente de novo.',
     errNoLists: 'Esta conta do Bring! não tem listas.',
     errListNotFound: 'Esta conta não tem nenhuma lista chamada “%s”.',
-    yourLists: 'Suas listas (toque para escolher uma):'
+    yourLists: 'Suas listas (toque para escolher uma):',
+    watchSection: 'Relógio',
+    disableTouch: 'Desativar o toque',
+    disableTouchHint: 'Para relógios com tela sensível ao toque: tocar não marca mais itens por engano. Use os botões.'
   }
 };
 
@@ -201,6 +220,8 @@ var CSS = '' +
   'input[type=email],input[type=password],input[type=text]{width:100%;padding:12px;font-size:16px;' +
   'color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;}' +
   'input:focus{outline:2px solid var(--accent);outline-offset:-1px;}' +
+  '.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;margin:0 0 10px;color:var(--muted);}' +
+  '.card .check{margin-top:0;color:var(--text);}' +
   '.check{display:flex;align-items:center;gap:8px;font-weight:400;margin-top:8px;color:var(--muted);}' +
   '.status{border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:15px;}' +
   '.status.ok{background:var(--ok-bg);color:var(--ok);}' +
@@ -279,7 +300,8 @@ var SCRIPT = '' +
   '  var button = $(action);' +
   '  $("test").disabled = true; $("save").disabled = true;' +
   '  button.textContent = TEXT.working;' +
-  '  var payload = { action: action, email: email, password: password, listName: listName };' +
+  '  var payload = { action: action, email: email, password: password, listName: listName,' +
+  '    touchDisabled: $("touchDisabled").checked };' +
   '  location.href = returnTo() + encodeURIComponent(JSON.stringify(payload));' +
   '}' +
   '$("test").onclick = function () { submit("test"); };' +
@@ -292,7 +314,7 @@ var SCRIPT = '' +
   '}';
 
 // options: { email, listName, password (only a value the user just typed,
-// never the saved one), hasPassword, locale, check }
+// never the saved one), hasPassword, touchDisabled, locale, check }
 function buildSettingsUrl(options) {
   var o = options || {};
   var lang = pickLanguage(o.locale);
@@ -316,6 +338,10 @@ function buildSettingsUrl(options) {
     escapeHtml(o.listName || '') + '"></div>' +
     '<input type="submit" hidden>' +
     '</form>' +
+    '<section class="card"><h2>' + escapeHtml(t.watchSection) + '</h2>' +
+    '<label class="check"><input id="touchDisabled" type="checkbox"' + (o.touchDisabled ? ' checked' : '') + '> ' +
+    escapeHtml(t.disableTouch) + '</label>' +
+    '<p class="hint">' + escapeHtml(t.disableTouchHint) + '</p></section>' +
     '<p id="problem" role="alert"></p>' +
     '<div class="actions">' +
     '<button type="button" id="save" class="btn primary">' + escapeHtml(t.save) + '</button>' +
