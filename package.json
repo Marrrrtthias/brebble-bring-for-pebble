@@ -1,7 +1,7 @@
 {
   "name": "brebble",
   "author": "Matthias Gellrich",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "keywords": ["pebble-app"],
   "private": true,
   "scripts": {
