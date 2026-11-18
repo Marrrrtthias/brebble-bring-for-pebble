@@ -14,6 +14,7 @@ The black & white watches don't show these icons (see window_load()).
 Colours are taken from the Pebble 64-colour palette so the bitmap converter
 keeps them as they are.
 """
+import math
 from pathlib import Path
 from PIL import Image, ImageDraw
 
@@ -48,6 +49,13 @@ DARK_GREEN = (0, 85, 0)
 LIBERTY = (85, 85, 170)
 LAVENDER_INDIGO = (170, 85, 255)
 PURPLE = (85, 0, 170)
+ORANGE = (255, 85, 0)
+CELESTE = (170, 255, 255)
+TIFFANY_BLUE = (0, 170, 170)
+MEDIUM_AQUAMARINE = (85, 255, 170)
+FASHION_MAGENTA = (255, 0, 170)
+BRILLIANT_ROSE = (255, 85, 170)
+BULGARIAN_ROSE = (85, 0, 0)
 
 
 def p(x, y):
@@ -102,25 +110,18 @@ def draw_dairy(d):
               outline=COBALT, width=3 * S)
 
 
-def draw_fruit(d):
-    # An apple with stem and leaf.
-    d.ellipse(box(6, 26, 58, 94), fill=RED)
-    d.ellipse(box(42, 26, 94, 94), fill=RED)
-    d.ellipse(box(20, 60, 80, 98), fill=RED)
-    d.ellipse(box(18, 36, 34, 56), fill=SUNSET_ORANGE)
-    thick_line(d, [(50, 34), (52, 8)], WINDSOR_TAN, 7)
-    d.polygon(poly((54, 20), (66, 6), (88, 6), (78, 18)), fill=ISLAMIC_GREEN)
-    d.ellipse(box(54, 6, 88, 24), fill=ISLAMIC_GREEN)
-
-
-def draw_vegetable(d):
-    # Broccoli: a cloud of florets on a thick stalk.
-    d.polygon(poly((40, 56), (60, 56), (66, 96), (34, 96)), fill=MAY_GREEN)
-    for x0, y0, x1, y1 in ((4, 26, 44, 64), (56, 26, 96, 64), (24, 4, 76, 50),
-                           (20, 34, 80, 70)):
-        d.ellipse(box(x0, y0, x1, y1), fill=ISLAMIC_GREEN)
-    for x, y in ((26, 30), (50, 18), (70, 38), (44, 46)):
-        d.ellipse(box(x - 5, y - 5, x + 5, y + 5), fill=DARK_GREEN)
+def draw_produce(d):
+    # Fruit & vegetables: a carrot behind an apple.
+    d.polygon(poly((52, 30), (90, 22), (82, 98)), fill=ORANGE)
+    for y in (44, 60, 76):
+        thick_line(d, [(64, y), (74, y - 2)], WINDSOR_TAN, 3)
+    for x0, x1 in ((50, 66), (62, 80), (74, 96)):
+        d.ellipse(box(x0, 0, x1, 30), fill=ISLAMIC_GREEN)
+    d.ellipse(box(2, 40, 40, 96), fill=RED)
+    d.ellipse(box(26, 40, 64, 96), fill=RED)
+    d.ellipse(box(12, 50, 24, 64), fill=SUNSET_ORANGE)
+    thick_line(d, [(33, 46), (35, 30)], WINDSOR_TAN, 6)
+    d.ellipse(box(36, 26, 56, 38), fill=ISLAMIC_GREEN)
 
 
 def draw_meat(d):
@@ -144,8 +145,68 @@ def draw_drink(d):
     d.rectangle(box(20, 48, 80, 66), fill=RAJAH)
 
 
-def draw_cleaning(d):
-    # A soap bottle with a pump.
+def draw_ingredients(d):
+    # Ingredients & spices: a spice jar with paprika and a wooden lid.
+    d.rounded_rectangle(box(16, 28, 84, 96), radius=10 * S, fill=CELESTE)
+    d.rounded_rectangle(box(16, 52, 84, 96), radius=10 * S, fill=RED)
+    d.rectangle(box(16, 52, 84, 62), fill=RED)
+    d.rectangle(box(26, 60, 74, 82), fill=WHITE)
+    d.ellipse(box(42, 64, 58, 78), fill=ORANGE)
+    d.rounded_rectangle(box(16, 28, 84, 96), radius=10 * S, outline=DARK_GRAY, width=3 * S)
+    d.rounded_rectangle(box(22, 6, 78, 30), radius=4 * S, fill=WINDSOR_TAN)
+    d.rectangle(box(22, 14, 78, 18), fill=CHROME_YELLOW)
+
+
+def draw_frozen(d):
+    # Frozen & convenience: a snowflake.
+
+    cx, cy = 50, 50
+    for k in range(3):
+        a = math.pi / 2 + k * math.pi / 3
+        dx, dy = math.cos(a), math.sin(a)
+        thick_line(d, [(cx - 44 * dx, cy - 44 * dy), (cx + 44 * dx, cy + 44 * dy)], COBALT, 9)
+    for k in range(6):
+        a = math.pi / 2 + k * math.pi / 3
+        dx, dy = math.cos(a), math.sin(a)
+        bx, by = cx + 26 * dx, cy + 26 * dy
+        for side in (-1, 1):
+            b = a + side * math.pi / 4
+            thick_line(d, [(bx, by), (bx + 15 * math.cos(b), by + 15 * math.sin(b))], PICTON_BLUE, 7)
+    d.ellipse(box(40, 40, 60, 60), fill=PICTON_BLUE)
+
+
+def draw_grain(d):
+    # Grain products: an ear of wheat.
+    thick_line(d, [(50, 98), (50, 16)], WINDSOR_TAN, 6)
+    for y in (24, 40, 56, 72):
+        for x0, x1 in ((24, 50), (50, 76)):
+            d.ellipse(box(x0, y, x1, y + 20), fill=CHROME_YELLOW, outline=WINDSOR_TAN, width=2 * S)
+    d.ellipse(box(38, 2, 62, 28), fill=CHROME_YELLOW, outline=WINDSOR_TAN, width=2 * S)
+
+
+def draw_snacks(d):
+    # Snacks & sweets: a wrapped candy.
+    d.polygon(poly((26, 50), (2, 26), (10, 50), (2, 74)), fill=BRILLIANT_ROSE)
+    d.polygon(poly((74, 50), (98, 26), (90, 50), (98, 74)), fill=BRILLIANT_ROSE)
+    d.ellipse(box(18, 24, 82, 76), fill=FASHION_MAGENTA)
+    for x in (34, 50, 66):
+        thick_line(d, [(x - 6, 30), (x + 6, 70)], WHITE, 5)
+    d.ellipse(box(18, 24, 82, 76), outline=BULGARIAN_ROSE, width=3 * S)
+
+
+def draw_household(d):
+    # Household: a spray bottle.
+    d.polygon(poly((30, 4), (76, 4), (82, 14), (82, 24), (30, 24)), fill=DARK_GRAY)
+    d.polygon(poly((30, 4), (14, 8), (14, 14), (30, 14)), fill=DARK_GRAY)
+    d.polygon(poly((56, 24), (68, 24), (62, 44), (52, 36)), fill=DARK_GRAY)
+    d.rectangle(box(36, 24, 56, 38), fill=LIGHT_GRAY)
+    d.rounded_rectangle(box(24, 36, 76, 96), radius=10 * S, fill=TIFFANY_BLUE)
+    d.rounded_rectangle(box(32, 54, 68, 82), radius=4 * S, fill=WHITE)
+    d.ellipse(box(42, 60, 58, 76), fill=MEDIUM_AQUAMARINE)
+
+
+def draw_care(d):
+    # Care & health: a lotion bottle with a pump.
     d.rectangle(box(42, 6, 78, 14), fill=PURPLE)
     d.rectangle(box(42, 6, 52, 30), fill=PURPLE)
     d.rectangle(box(36, 26, 58, 40), fill=PURPLE)
@@ -154,16 +215,42 @@ def draw_cleaning(d):
     d.ellipse(box(38, 60, 56, 76), fill=PICTON_BLUE)
 
 
-# Must match the category order in src/pkjs/categorize.js.
+
+
+def draw_pet(d):
+    # Pet supplies: a paw print.
+    d.ellipse(box(24, 46, 76, 92), fill=WINDSOR_TAN)
+    for x, y, r in ((14, 40, 11), (34, 18, 12), (66, 18, 12), (86, 40, 11)):
+        d.ellipse(box(x - r, y - r, x + r, y + r + 4), fill=WINDSOR_TAN)
+
+
+def draw_garden(d):
+    # Home & garden: a potted plant.
+    thick_line(d, [(50, 64), (50, 30)], DARK_GREEN, 6)
+    d.ellipse(box(10, 24, 50, 48), fill=ISLAMIC_GREEN)
+    d.ellipse(box(50, 12, 90, 36), fill=MAY_GREEN)
+    d.ellipse(box(34, 2, 66, 30), fill=ISLAMIC_GREEN)
+    d.polygon(poly((18, 64), (82, 64), (74, 98), (26, 98)), fill=ORANGE)
+    d.rectangle(box(14, 58, 86, 70), fill=WINDSOR_TAN)
+
+
+# One icon per Bring! section. Must match the ICON_* order in
+# src/pkjs/categorize.js (and CATEGORY_RESOURCE_IDS in src/c/bring_pebble.c).
 ICONS = {
     "default": draw_default,
+    "produce": draw_produce,
     "bread": draw_bread,
     "dairy": draw_dairy,
-    "fruit": draw_fruit,
-    "vegetable": draw_vegetable,
     "meat": draw_meat,
+    "ingredients": draw_ingredients,
+    "frozen": draw_frozen,
+    "grain": draw_grain,
+    "snacks": draw_snacks,
     "drink": draw_drink,
-    "cleaning": draw_cleaning,
+    "household": draw_household,
+    "care": draw_care,
+    "pet": draw_pet,
+    "garden": draw_garden,
 }
 
 

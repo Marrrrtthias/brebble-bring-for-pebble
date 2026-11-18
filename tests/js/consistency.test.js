@@ -44,12 +44,12 @@ test('every error code sent by JS exists in C with the same value', function () 
   });
 });
 
-test('icon categories in JS match the icon table order in C', function () {
-  var js = jsConstants(read('src/pkjs/categorize.js'), 'CATEGORY_');
+test('icon ids in JS match the icon table order in C', function () {
+  var js = jsConstants(read('src/pkjs/categorize.js'), 'ICON_');
   var table = cSource.match(/CATEGORY_RESOURCE_IDS\[[^\]]*\] = \{([^}]*)\}/)[1];
   var icons = table.match(/RESOURCE_ID_ICON_\w+/g);
   icons.forEach(function (icon, index) {
-    var name = 'CATEGORY_' + icon.replace('RESOURCE_ID_ICON_', '');
+    var name = icon.replace('RESOURCE_ID_', '');
     assert.strictEqual(js[name], index, name);
   });
   assert.strictEqual(Object.keys(js).length, icons.length);
@@ -64,6 +64,27 @@ test('every message key used in code is declared in package.json', function () {
   Object.keys(used).forEach(function (key) {
     assert.ok(declared.indexOf(key) >= 0, key + ' missing from package.json');
   });
+});
+
+test('every icon in the C table is a declared resource with generated images', function () {
+  var media = JSON.parse(read('package.json')).pebble.resources.media;
+  var script = read('store/make_category_icons.py');
+  var table = cSource.match(/CATEGORY_RESOURCE_IDS\[[^\]]*\] = \{([^}]*)\}/)[1];
+  var icons = table.match(/RESOURCE_ID_ICON_\w+/g);
+  var scriptNames = script.match(/ICONS = \{([^}]*)\}/)[1].match(/"(\w+)":/g).map(function (s) {
+    return s.slice(1, -2);
+  });
+  icons.forEach(function (icon, index) {
+    var name = icon.replace('RESOURCE_ID_ICON_', '').toLowerCase();
+    var entry = media.filter(function (m) { return m.name === 'ICON_' + name.toUpperCase(); })[0];
+    assert.ok(entry, icon + ' missing from package.json');
+    ['', '~emery', '~gabbro'].forEach(function (suffix) {
+      var file = 'resources/' + entry.file.replace('.png', suffix + '.png');
+      assert.ok(fs.existsSync(path.join(root, file)), file);
+    });
+    assert.strictEqual(scriptNames[index], name, 'make_category_icons.py ICONS order');
+  });
+  assert.strictEqual(scriptNames.length, icons.length);
 });
 
 test('item details sent by JS fit the watch buffer when they are plain ASCII', function () {

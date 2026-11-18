@@ -40,6 +40,7 @@ function toWatchItems(purchase, recently) {
     for (var i = 0; i < entries.length; i++) {
       merged.push({
         name: entries[i].itemId,
+        sectionId: entries[i].sectionId,
         detail: String(entries[i].specification || '').replace(/\s+/g, ' ').trim(),
         done: done
       });
@@ -182,7 +183,7 @@ function sendItemsThenDone(syncId, items, locale) {
         itemIndex: i,
         itemName: item.name,
         itemDone: item.done ? 1 : 0,
-        itemIcon: Categorize.categorize(item.name, locale)
+        itemIcon: Categorize.iconFor(item, locale)
       };
       if (item.detail) {
         msg.itemDetail = Text.truncateText(item.detail, MAX_DETAIL);

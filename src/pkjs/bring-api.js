@@ -27,6 +27,22 @@ var LOCALES_BASE_URL = 'https://web.getbring.com/locale/';
 // In-memory only: cheap enough to refetch if pkjs restarts, no need to burn localStorage on it.
 var s_translationsCache = {};
 
+// Item sections ("categories"). The list endpoint only returns item ids, no
+// section. Bring!'s apps take the section from:
+//  - the public per-locale catalog, LOCALES_BASE_URL + 'catalog.<locale>.json':
+//    { language, catalog: { sections: [{ sectionId, name, items: [{ itemId, name }] }] } }
+//    sectionId is the German section name ('Früchte & Gemüse', ...) in every
+//    locale, name the localized one; itemId is the canonical (German) item id,
+//    as used in the list. Locales differ slightly in which items they list
+//    (regional products), so the account's own locale is used.
+//  - the list's item details, GET v2/bringlists/<listUuid>/details:
+//    [{ uuid, itemId, listUuid, userIconItemId, userSectionId, assignedTo, imageReference }]
+//    for items the user moved to another section or sorted a free-typed item
+//    into one (userSectionId, '' when not set). This overrides the catalog.
+// Free-typed items the user never sorted have no section at all.
+// { locale: { canonicalItemId: sectionId } }, in memory like the translations.
+var s_catalogSectionsCache = {};
+
 function loadState() {
   return {
     email: localStorage.getItem('bring_email') || '',
@@ -265,6 +281,68 @@ function loadTranslations(locale, callback) {
   });
 }
 
+function catalogSections(catalog) {
+  var sections = (catalog && catalog.catalog && catalog.catalog.sections) || [];
+  var map = {};
+  var i, j, items;
+  for (i = 0; i < sections.length; i++) {
+    items = (sections[i] && sections[i].items) || [];
+    for (j = 0; j < items.length; j++) {
+      if (items[j] && items[j].itemId) {
+        map[items[j].itemId] = sections[i].sectionId;
+      }
+    }
+  }
+  return map;
+}
+
+// callback({ canonicalItemId: sectionId }); {} when the catalog can't be loaded.
+function loadCatalogSections(locale, callback) {
+  if (s_catalogSectionsCache[locale]) {
+    callback(s_catalogSectionsCache[locale]);
+    return;
+  }
+  xhrRequest('GET', LOCALES_BASE_URL + 'catalog.' + locale + '.json', {}, null, function (err, data) {
+    var map = err ? {} : catalogSections(data);
+    if (Object.keys(map).length) {
+      s_catalogSectionsCache[locale] = map; // only cache a usable catalog; retry next sync otherwise
+    }
+    callback(map);
+  });
+}
+
+// callback({ canonicalItemId: userSectionId }) for the items the user sorted
+// into a section in this list; {} on failure (best-effort, not cached since
+// the user can change it any time).
+function loadUserSections(state, callback) {
+  var headers = authHeaders(state);
+  xhrRequest('GET', BRING_BASE + 'v2/bringlists/' + state.listUuid + '/details', headers, null,
+    function (err, data) {
+      var map = {};
+      var i;
+      if (!err && data && data.length) {
+        for (i = 0; i < data.length; i++) {
+          if (data[i] && data[i].itemId && data[i].userSectionId) {
+            map[data[i].itemId] = data[i].userSectionId;
+          }
+        }
+      }
+      callback(map);
+    });
+}
+
+// Sets item.sectionId on each item (null when unknown). Must run before the
+// item ids are translated, since both sources use the canonical ids.
+function assignSections(list, userSections, catalogSections) {
+  var i, id;
+  for (i = 0; i < list.length; i++) {
+    if (!list[i]) { continue; }
+    id = list[i].itemId;
+    list[i].sectionId = (Object.prototype.hasOwnProperty.call(userSections, id) && userSections[id]) ||
+      (Object.prototype.hasOwnProperty.call(catalogSections, id) && catalogSections[id]) || null;
+  }
+}
+
 function storeTokens(state, data) {
   state.accessToken = data.access_token;
   state.tokenType = data.token_type || 'Bearer';
@@ -414,6 +492,8 @@ function translateItemIds(list, forwardDict) {
   }
 }
 
+// callback(err, { purchase: [...], recently: [...] }); each item has its
+// (translated) itemId and its sectionId (see assignSections).
 function getListItems(state, callback) {
   var headers = authHeaders(state);
   xhrRequest('GET', BRING_BASE + 'v2/bringlists/' + state.listUuid, headers, null, function (err, data) {
@@ -422,10 +502,19 @@ function getListItems(state, callback) {
       return;
     }
     var items = (data && data.items) || { purchase: [], recently: [] };
-    loadTranslations(state.locale || BRING_DEFAULT_LOCALE, function (dict) {
-      translateItemIds(items.purchase, dict.forward);
-      translateItemIds(items.recently, dict.forward);
-      callback(null, items);
+    items.purchase = items.purchase || [];
+    items.recently = items.recently || [];
+    var locale = state.locale || BRING_DEFAULT_LOCALE;
+    loadUserSections(state, function (userSections) {
+      loadCatalogSections(locale, function (sections) {
+        assignSections(items.purchase, userSections, sections);
+        assignSections(items.recently, userSections, sections);
+        loadTranslations(locale, function (dict) {
+          translateItemIds(items.purchase, dict.forward);
+          translateItemIds(items.recently, dict.forward);
+          callback(null, items);
+        });
+      });
     });
   });
 }
@@ -473,5 +562,7 @@ module.exports = {
   checkAccount: checkAccount,
   ensureAuth: ensureAuth,
   getListItems: getListItems,
+  catalogSections: catalogSections,
+  assignSections: assignSections,
   updateItem: updateItem
 };

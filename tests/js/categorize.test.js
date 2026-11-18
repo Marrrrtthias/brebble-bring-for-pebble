@@ -1,9 +1,14 @@
 // Unit tests for src/pkjs/categorize.js (run with `npm test`).
 var test = require('node:test');
 var assert = require('node:assert');
-var categorize = require('../../src/pkjs/categorize').categorize;
+var Categorize = require('../../src/pkjs/categorize');
+var categorize = Categorize.guessSection;
 
-var DEFAULT = 0, BREAD = 1, DAIRY = 2, FRUIT = 3, VEGETABLE = 4, MEAT = 5, DRINK = 6, CLEANING = 7;
+// Keyword guesses give Bring! section ids (null = no match).
+var DEFAULT = null;
+var BREAD = 'Brot & Gebäck', DAIRY = 'Milch & Käse', FRUIT = 'Früchte & Gemüse',
+  VEGETABLE = 'Früchte & Gemüse', MEAT = 'Fleisch & Fisch', DRINK = 'Getränke & Tabak',
+  CLEANING = 'Haushalt & Gesundheit';
 
 function check(cases) {
   cases.forEach(function (c) {
@@ -82,7 +87,7 @@ test('only the given language is used', function () {
   ]);
 });
 
-test('languages without keywords and missing locales give the default icon', function () {
+test('languages without keywords and missing locales give no section', function () {
   check([
     ['Melk', 'nl-NL', DEFAULT],
     ['Milk', 'nl-NL', DEFAULT],
@@ -98,4 +103,52 @@ test('results are stable across repeated calls (cached keyword forms)', function
     assert.strictEqual(categorize('Vollmilch', 'de-DE'), DAIRY);
     assert.strictEqual(categorize('Tomatoes', 'en-US'), VEGETABLE);
   }
+});
+
+// The 13 sections of Bring!'s catalog (catalog.<locale>.json, sectionId).
+var BRING_SECTIONS = [
+  'Früchte & Gemüse', 'Brot & Gebäck', 'Milch & Käse', 'Fleisch & Fisch',
+  'Zutaten & Gewürze', 'Fertig- & Tiefkühlprodukte', 'Getreideprodukte',
+  'Snacks & Süsswaren', 'Getränke & Tabak', 'Haushalt & Gesundheit',
+  'Pflege & Gesundheit', 'Tierbedarf', 'Baumarkt & Garten'
+];
+
+test('every Bring! section has its own icon', function () {
+  var seen = {};
+  BRING_SECTIONS.forEach(function (section) {
+    var icon = Categorize.iconFor({ name: 'x', sectionId: section }, 'en-US');
+    assert.ok(icon > Categorize.ICON_DEFAULT, section);
+    assert.ok(!seen[icon], section + ' shares icon ' + icon);
+    seen[icon] = true;
+  });
+  assert.strictEqual(Object.keys(Categorize.SECTION_ICONS).length, BRING_SECTIONS.length);
+});
+
+test('the item section wins over the name', function () {
+  // "Milk" sorted into household by the user: the section counts.
+  assert.strictEqual(
+    Categorize.iconFor({ name: 'Milk', sectionId: 'Haushalt & Gesundheit' }, 'en-US'),
+    Categorize.SECTION_ICONS['Haushalt & Gesundheit']);
+  // A catalog item whose translated name has no keyword still gets its icon.
+  assert.strictEqual(
+    Categorize.iconFor({ name: 'Dog food', sectionId: 'Tierbedarf' }, 'en-US'),
+    Categorize.SECTION_ICONS['Tierbedarf']);
+});
+
+test('items without a known section fall back to the name guess, then the default', function () {
+  assert.strictEqual(Categorize.iconFor({ name: 'Medialunas', sectionId: null }, 'es-ES'),
+    Categorize.SECTION_ICONS['Brot & Gebäck']);
+  // Unknown (e.g. user-defined) section ids are ignored.
+  assert.strictEqual(Categorize.iconFor({ name: 'Leche', sectionId: 'Mi sección' }, 'es-ES'),
+    Categorize.SECTION_ICONS['Milch & Käse']);
+  assert.strictEqual(Categorize.iconFor({ name: 'Pilas' }, 'es-ES'), Categorize.ICON_DEFAULT);
+  assert.strictEqual(Categorize.iconFor({ name: 'Pilas', sectionId: 'Mi sección' }, 'nl-NL'),
+    Categorize.ICON_DEFAULT);
+  assert.strictEqual(Categorize.iconFor(null, 'en-US'), Categorize.ICON_DEFAULT);
+});
+
+test('keyword sections are all known sections', function () {
+  ['Bread', 'Milk', 'Apple', 'Tomato', 'Chicken', 'Beer', 'Soap'].forEach(function (name) {
+    assert.ok(Categorize.isKnownSection(categorize(name, 'en-US')), name);
+  });
 });
