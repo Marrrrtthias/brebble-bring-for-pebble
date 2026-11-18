@@ -143,10 +143,17 @@ function sendError(code, detail) {
   Pebble.sendAppMessage(msg);
 }
 
-function sendItemsThenDone(items, locale) {
+// Identifies the latest sync. A newer sync makes a still-streaming older one
+// stop, so two streams never interleave on the watch.
+var s_syncId = 0;
+
+function sendItemsThenDone(syncId, items, locale) {
   function afterStart() {
     var i = 0;
     function sendNext() {
+      if (syncId !== s_syncId) {
+        return;
+      }
       if (i >= items.length) {
         Pebble.sendAppMessage({ action: ACTION_SYNC_DONE });
         return;
@@ -185,12 +192,16 @@ function doSync() {
 }
 
 function syncList() {
+  var syncId = ++s_syncId;
   BringApi.ensureAuth(function (authErr, state) {
     if (authErr) {
       sendError(BringApi.isLoginRejected(authErr) ? ERR_LOGIN : ERR_CONNECT_BRING);
       return;
     }
     BringApi.getListItems(state, function (err, items) {
+      if (syncId !== s_syncId) {
+        return;
+      }
       if (err) {
         sendError(ERR_READ_LIST);
         return;
@@ -198,7 +209,7 @@ function syncList() {
       s_lastItems = toWatchItems(items.purchase, items.recently);
       // Item names are in the Bring! account's language. If that couldn't be
       // determined, catalog items were left untranslated, i.e. in German.
-      sendItemsThenDone(s_lastItems, state.locale || BringApi.BRING_DEFAULT_LOCALE);
+      sendItemsThenDone(syncId, s_lastItems, state.locale || BringApi.BRING_DEFAULT_LOCALE);
     });
   });
 }
