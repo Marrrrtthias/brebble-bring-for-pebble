@@ -69,7 +69,6 @@ static MenuLayer *s_menu_layer;
 static TextLayer *s_message_layer;
 static DictationSession *s_dictation_session;
 static GBitmap *s_category_icons[ICON_CATEGORY_COUNT];
-static GBitmap *s_add_icon;
 
 static BringItem s_items[MAX_ITEMS];
 static int s_item_count = 0;
@@ -322,11 +321,11 @@ static void dictation_session_callback(DictationSession *session, DictationSessi
 #if PBL_DISPLAY_HEIGHT >= 200
 #define ADD_ROW_HEIGHT 61
 #define ROW_INSET 10    // left inset of the system menu cells
-#define ICON_TEXT_GAP 9 // gap between icon and title in the system menu cells
+#define ICON_TEXT_GAP 9 // gap between icon and title in item rows
 #else
 #define ADD_ROW_HEIGHT 44
 #define ROW_INSET 5
-#define ICON_TEXT_GAP 5
+#define ICON_TEXT_GAP 5 // gap between icon and title in item rows
 #endif
 
 // Item rows use the cell heights of the system app launcher (PebbleOS
@@ -614,7 +613,7 @@ static void draw_item_row(GContext *ctx, const Layer *cell_layer, const BringIte
 
 static void menu_draw_row_callback(GContext *ctx, const Layer *cell_layer, MenuIndex *cell_index, void *context) {
   if (cell_index->section == 0) {
-    menu_cell_basic_draw(ctx, cell_layer, s_strings->add_item, s_strings->add_item_hint, s_add_icon);
+    menu_cell_basic_draw(ctx, cell_layer, s_strings->add_item, s_strings->add_item_hint, NULL);
     return;
   }
 
@@ -861,7 +860,6 @@ static void window_load(Window *window) {
     for (int i = 0; i < ICON_CATEGORY_COUNT; i++) {
       s_category_icons[i] = gbitmap_create_with_resource(CATEGORY_RESOURCE_IDS[i]);
     }
-    s_add_icon = gbitmap_create_with_resource(RESOURCE_ID_ICON_APP);
   }
 
   update_ui();
@@ -883,10 +881,6 @@ static void window_unload(Window *window) {
       gbitmap_destroy(s_category_icons[i]);
       s_category_icons[i] = NULL;
     }
-  }
-  if (s_add_icon) {
-    gbitmap_destroy(s_add_icon);
-    s_add_icon = NULL;
   }
   text_layer_destroy(s_message_layer);
   menu_layer_destroy(s_menu_layer);
