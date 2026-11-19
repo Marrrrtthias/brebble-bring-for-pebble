@@ -65,6 +65,7 @@ typedef enum {
 } AppState;
 
 static Window *s_window;
+static StatusBarLayer *s_status_bar;
 static MenuLayer *s_menu_layer;
 static TextLayer *s_message_layer;
 static DictationSession *s_dictation_session;
@@ -235,11 +236,17 @@ static const char *const MESSAGE_FONT_KEYS[] = {
 };
 #define MESSAGE_FONT_COUNT (int)(sizeof(MESSAGE_FONT_KEYS) / sizeof(MESSAGE_FONT_KEYS[0]))
 
-// Shows a full-screen message (loading, setup hint, errors) in the largest
+static GRect content_bounds(void) {
+  GRect bounds = layer_get_bounds(window_get_root_layer(s_window));
+  bounds.origin.y += STATUS_BAR_LAYER_HEIGHT;
+  bounds.size.h -= STATUS_BAR_LAYER_HEIGHT;
+  return bounds;
+}
+
+// Shows a message below the status bar (loading, setup hint, errors) in the largest
 // font that fits, centered horizontally and vertically.
 static void show_message(const char *text) {
-  Layer *window_layer = window_get_root_layer(s_window);
-  GRect bounds = layer_get_bounds(window_layer);
+  GRect bounds = content_bounds();
   // Round displays need a wider inset so text doesn't hit the curved edge.
   int16_t h_inset = PBL_IF_ROUND_ELSE(bounds.size.w / 8, 6);
   int16_t v_inset = PBL_IF_ROUND_ELSE(bounds.size.h / 10, 4);
@@ -824,7 +831,7 @@ static void outbox_failed_callback(DictionaryIterator *iterator, AppMessageResul
 
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
-  GRect bounds = layer_get_bounds(window_layer);
+  GRect bounds = content_bounds();
 
   s_menu_layer = menu_layer_create(bounds);
   menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks) {
@@ -852,6 +859,10 @@ static void window_load(Window *window) {
   text_layer_set_font(s_message_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_overflow_mode(s_message_layer, GTextOverflowModeWordWrap);
   layer_add_child(window_layer, text_layer_get_layer(s_message_layer));
+
+  s_status_bar = status_bar_layer_create();
+  status_bar_layer_set_colors(s_status_bar, GColorWhite, GColorBlack);
+  layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
 
   s_dictation_session = dictation_session_create(DICTATION_BUFFER_SIZE, dictation_session_callback, NULL);
 
@@ -890,6 +901,7 @@ static void window_unload(Window *window) {
   }
   text_layer_destroy(s_message_layer);
   menu_layer_destroy(s_menu_layer);
+  status_bar_layer_destroy(s_status_bar);
 }
 
 static void init(void) {
