@@ -42,6 +42,8 @@ language in `src/pkjs/categorize.js` (icon guess for free-typed items).
   the top (voice dictation) and the list below (`[ ]`/`[x]` depending on
   whether it was bought). Selecting an item toggles it; holding SELECT
   reloads the list from Bring!.
+  The section header shows the resolved Bring! list name rather than a fixed
+  "Shopping list" label; long names are shortened to fit the watch.
 - **`src/pkjs/`**: the phone bridge (PebbleKit JS). The watch *never* talks to
   Bring! directly; it only exchanges short `AppMessage`s with the phone, which
   makes the HTTPS calls to `api.getbring.com`.
