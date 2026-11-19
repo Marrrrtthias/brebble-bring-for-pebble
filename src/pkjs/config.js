@@ -12,9 +12,11 @@
 //            the following check fails), checks them and syncs the watch.
 // An empty password means "keep the saved password". The saved password is
 // never put into the page. `touchDisabled` (boolean) is the watch setting that
-// turns off touch input on watches with a touchscreen.
+// turns off touch input on watches with a touchscreen. `sectionOrder` is the
+// order of the sections the open items are grouped by (see sections.js).
 
 var Locale = require('./locale');
+var Sections = require('./sections');
 
 var TEXTS = {
   en: {
@@ -43,7 +45,12 @@ var TEXTS = {
     yourLists: 'Your lists (tap to pick one):',
     watchSection: 'Watch',
     disableTouch: 'Disable touch',
-    disableTouchHint: 'For watches with a touchscreen: taps no longer check off items by accident. Use the buttons instead.'
+    disableTouchHint: 'For watches with a touchscreen: taps no longer check off items by accident. Use the buttons instead.',
+    sortSection: 'Sort order',
+    sortHint: 'Open items on the watch are grouped by section in this order, like in the Bring! app.',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    resetOrder: 'Reset to Bring! order'
   },
   es: {
     title: 'Ajustes de Brebble',
@@ -71,7 +78,12 @@ var TEXTS = {
     yourLists: 'Tus listas (pulsa para elegir una):',
     watchSection: 'Reloj',
     disableTouch: 'Desactivar el táctil',
-    disableTouchHint: 'Para relojes con pantalla táctil: tocar ya no marca artículos por error. Usa los botones.'
+    disableTouchHint: 'Para relojes con pantalla táctil: tocar ya no marca artículos por error. Usa los botones.',
+    sortSection: 'Orden',
+    sortHint: 'Los artículos pendientes se agrupan en el reloj por sección en este orden, como en la app Bring!.',
+    moveUp: 'Subir',
+    moveDown: 'Bajar',
+    resetOrder: 'Restablecer el orden de Bring!'
   },
   de: {
     title: 'Brebble-Einstellungen',
@@ -99,7 +111,12 @@ var TEXTS = {
     yourLists: 'Deine Listen (zum Auswählen antippen):',
     watchSection: 'Uhr',
     disableTouch: 'Touch deaktivieren',
-    disableTouchHint: 'Für Uhren mit Touchscreen: Antippen hakt keine Artikel mehr versehentlich ab. Nutze stattdessen die Tasten.'
+    disableTouchHint: 'Für Uhren mit Touchscreen: Antippen hakt keine Artikel mehr versehentlich ab. Nutze stattdessen die Tasten.',
+    sortSection: 'Sortierung',
+    sortHint: 'Offene Artikel werden auf der Uhr nach Bereichen in dieser Reihenfolge gruppiert, wie in der Bring!-App.',
+    moveUp: 'Nach oben',
+    moveDown: 'Nach unten',
+    resetOrder: 'Bring!-Reihenfolge wiederherstellen'
   },
   fr: {
     title: 'Paramètres Brebble',
@@ -127,7 +144,12 @@ var TEXTS = {
     yourLists: 'Vos listes (appuyez pour en choisir une) :',
     watchSection: 'Montre',
     disableTouch: 'Désactiver le tactile',
-    disableTouchHint: 'Pour les montres à écran tactile : un appui ne coche plus d’article par erreur. Utilisez les boutons.'
+    disableTouchHint: 'Pour les montres à écran tactile : un appui ne coche plus d’article par erreur. Utilisez les boutons.',
+    sortSection: 'Ordre de tri',
+    sortHint: 'Sur la montre, les articles à acheter sont regroupés par rayon dans cet ordre, comme dans l’appli Bring!.',
+    moveUp: 'Monter',
+    moveDown: 'Descendre',
+    resetOrder: 'Rétablir l’ordre de Bring!'
   },
   it: {
     title: 'Impostazioni di Brebble',
@@ -155,7 +177,12 @@ var TEXTS = {
     yourLists: 'Le tue liste (tocca per sceglierne una):',
     watchSection: 'Orologio',
     disableTouch: 'Disattiva il touch',
-    disableTouchHint: 'Per orologi con touchscreen: un tocco non spunta più gli articoli per sbaglio. Usa i pulsanti.'
+    disableTouchHint: 'Per orologi con touchscreen: un tocco non spunta più gli articoli per sbaglio. Usa i pulsanti.',
+    sortSection: 'Ordinamento',
+    sortHint: 'Sull’orologio gli articoli da comprare sono raggruppati per reparto in questo ordine, come nell’app Bring!.',
+    moveUp: 'Sposta su',
+    moveDown: 'Sposta giù',
+    resetOrder: 'Ripristina l’ordine di Bring!'
   },
   pt: {
     title: 'Configurações do Brebble',
@@ -183,7 +210,12 @@ var TEXTS = {
     yourLists: 'Suas listas (toque para escolher uma):',
     watchSection: 'Relógio',
     disableTouch: 'Desativar o toque',
-    disableTouchHint: 'Para relógios com tela sensível ao toque: tocar não marca mais itens por engano. Use os botões.'
+    disableTouchHint: 'Para relógios com tela sensível ao toque: tocar não marca mais itens por engano. Use os botões.',
+    sortSection: 'Ordem',
+    sortHint: 'No relógio, os itens a comprar são agrupados por seção nesta ordem, como no app Bring!.',
+    moveUp: 'Mover para cima',
+    moveDown: 'Mover para baixo',
+    resetOrder: 'Restaurar a ordem do Bring!'
   }
 };
 
@@ -238,7 +270,26 @@ var CSS = '' +
   '.btn.secondary{background:transparent;color:var(--accent);border:1.5px solid var(--accent);}' +
   '.btn:disabled{opacity:.6;}' +
   '.hint{font-size:13px;color:var(--muted);margin:4px 0 0;}' +
-  '#problem{color:var(--err);font-size:14px;margin:0 0 12px;min-height:0;}';
+  '#problem{color:var(--err);font-size:14px;margin:0 0 12px;min-height:0;}' +
+  '.order{list-style:none;margin:10px 0 12px;padding:0;}' +
+  '.order li{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--line);}' +
+  '.order li:last-child{border-bottom:none;}' +
+  '.order span{flex:1;font-size:15px;}' +
+  '.move{font:inherit;font-size:16px;width:40px;height:36px;border-radius:8px;cursor:pointer;' +
+  'border:1px solid var(--line);background:var(--bg);color:var(--text);}' +
+  '.move:disabled{opacity:.3;}' +
+  '.btn.small{padding:10px;font-size:14px;}';
+
+function orderItemsHtml(order, lang, t) {
+  var html = '';
+  for (var i = 0; i < order.length; i++) {
+    html += '<li data-section="' + escapeHtml(order[i]) + '"><span>' +
+      escapeHtml(Sections.nameOf(order[i], lang)) + '</span>' +
+      '<button type="button" class="move up" aria-label="' + escapeHtml(t.moveUp) + '">▲</button>' +
+      '<button type="button" class="move down" aria-label="' + escapeHtml(t.moveDown) + '">▼</button></li>';
+  }
+  return html;
+}
 
 function statusHtml(check, t) {
   if (!check) {
@@ -281,6 +332,7 @@ function statusHtml(check, t) {
 var SCRIPT = '' +
   'var HAS_PASSWORD = __HAS_PASSWORD__;' +
   'var TEXT = __TEXT__;' +
+  'var DEFAULT_ORDER_HTML = __DEFAULT_ORDER_HTML__;' +
   'function $(id) { return document.getElementById(id); }' +
   'function returnTo() {' +
   '  var vars = location.search.substring(1).split("&");' +
@@ -301,7 +353,7 @@ var SCRIPT = '' +
   '  $("test").disabled = true; $("save").disabled = true;' +
   '  button.textContent = TEXT.working;' +
   '  var payload = { action: action, email: email, password: password, listName: listName,' +
-  '    touchDisabled: $("touchDisabled").checked };' +
+  '    touchDisabled: $("touchDisabled").checked, sectionOrder: sectionOrder() };' +
   '  location.href = returnTo() + encodeURIComponent(JSON.stringify(payload));' +
   '}' +
   '$("test").onclick = function () { submit("test"); };' +
@@ -311,10 +363,33 @@ var SCRIPT = '' +
   'var chips = document.querySelectorAll(".chip");' +
   'for (var i = 0; i < chips.length; i++) {' +
   '  chips[i].onclick = function () { $("listName").value = this.getAttribute("data-list"); };' +
-  '}';
+  '}' +
+  'function sectionOrder() {' +
+  '  var rows = $("order").children, order = [];' +
+  '  for (var i = 0; i < rows.length; i++) { order.push(rows[i].getAttribute("data-section")); }' +
+  '  return order;' +
+  '}' +
+  'function updateMoveButtons() {' +
+  '  var rows = $("order").children;' +
+  '  for (var i = 0; i < rows.length; i++) {' +
+  '    rows[i].querySelector(".up").disabled = i === 0;' +
+  '    rows[i].querySelector(".down").disabled = i === rows.length - 1;' +
+  '  }' +
+  '}' +
+  '$("order").onclick = function (e) {' +
+  '  var button = e.target;' +
+  '  if (!button.className || button.className.indexOf("move") < 0 || button.disabled) { return; }' +
+  '  var row = button.parentNode, list = row.parentNode;' +
+  '  if (button.className.indexOf("up") >= 0) { list.insertBefore(row, row.previousElementSibling); }' +
+  '  else { list.insertBefore(row.nextElementSibling, row); }' +
+  '  updateMoveButtons();' +
+  '  if (!button.disabled) { button.focus(); }' +
+  '};' +
+  '$("resetOrder").onclick = function () { $("order").innerHTML = DEFAULT_ORDER_HTML; updateMoveButtons(); };' +
+  'updateMoveButtons();';
 
 // options: { email, listName, password (only a value the user just typed,
-// never the saved one), hasPassword, touchDisabled, locale, check }
+// never the saved one), hasPassword, touchDisabled, sectionOrder, locale, check }
 function buildSettingsUrl(options) {
   var o = options || {};
   var lang = pickLanguage(o.locale);
@@ -342,6 +417,11 @@ function buildSettingsUrl(options) {
     '<label class="check"><input id="touchDisabled" type="checkbox"' + (o.touchDisabled ? ' checked' : '') + '> ' +
     escapeHtml(t.disableTouch) + '</label>' +
     '<p class="hint">' + escapeHtml(t.disableTouchHint) + '</p></section>' +
+    '<section class="card"><h2>' + escapeHtml(t.sortSection) + '</h2>' +
+    '<p class="hint">' + escapeHtml(t.sortHint) + '</p>' +
+    '<ul id="order" class="order">' + orderItemsHtml(Sections.normalizeOrder(o.sectionOrder), lang, t) + '</ul>' +
+    '<button type="button" id="resetOrder" class="btn secondary small">' + escapeHtml(t.resetOrder) + '</button>' +
+    '</section>' +
     '<p id="problem" role="alert"></p>' +
     '<div class="actions">' +
     '<button type="button" id="save" class="btn primary">' + escapeHtml(t.save) + '</button>' +
@@ -353,7 +433,10 @@ function buildSettingsUrl(options) {
   var scriptText = { needEmail: t.needEmail, needPassword: t.needPassword, working: t.working };
   var script = SCRIPT
     .replace('__HAS_PASSWORD__', hasPassword ? 'true' : 'false')
-    .replace('__TEXT__', JSON.stringify(scriptText).replace(/</g, '\\u003c'));
+    .replace('__TEXT__', function () { return JSON.stringify(scriptText).replace(/</g, '\\u003c'); })
+    .replace('__DEFAULT_ORDER_HTML__', function () {
+      return JSON.stringify(orderItemsHtml(Sections.DEFAULT_ORDER, lang, t)).replace(/</g, '\\u003c');
+    });
 
   var html = '<!DOCTYPE html><html lang="' + lang + '"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +

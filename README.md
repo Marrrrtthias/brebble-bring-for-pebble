@@ -51,6 +51,8 @@ language in `src/pkjs/categorize.js` (icon guess for free-typed items).
     test) that opens in the phone's browser.
   - `categorize.js`: maps an item's Bring! section to its icon, with a
     keyword-based guess for items without a section.
+  - `sections.js`: groups the open items by section, in Bring!'s section
+    order or the one set on the settings page.
   - `index.js`: ties everything together, handling watch messages and
     configuration events.
 
@@ -67,6 +69,21 @@ language in `src/pkjs/categorize.js` (icon guess for free-typed items).
 5. Tap **Save**. The watch syncs automatically as soon as the settings are
    saved. The next time you open Settings, it shows the result of the last
    check of the saved settings.
+
+### Sort order
+
+Open items on the watch are grouped by their Bring! section, in the same
+order as the Bring! app shows them by default (fruit & vegetables, bread &
+pastries, milk & cheese, … home & garden, own items). Under **Sort order** on
+the settings page you can move sections up and down, or reset them to
+Bring!'s order; tap **Save** to apply it. Within a section, items keep the
+order Bring! returns them in. Items Bring! has no section for (free-typed
+items you never sorted into one) are shown under "own items", like in the
+Bring! app, even if their icon was guessed from the name. Completed items
+stay below the open ones, unsorted.
+
+The sort order is set here, not read from Bring!: a custom section order made
+in the Bring! app is not used.
 
 The settings page can't call Bring! itself (Bring!'s API rejects requests
 from a browser), so the test runs in the Pebble app's JavaScript and the page
