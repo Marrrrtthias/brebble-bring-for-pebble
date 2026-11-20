@@ -29,6 +29,7 @@ typedef enum {
 // Item details ("500 ml"), shown as a subtitle. The phone sends at most
 // MAX_DETAIL characters (src/pkjs/index.js); longer UTF-8 text is cut here.
 #define MAX_DETAIL_LEN 40
+#define MAX_LIST_NAME_LEN 128
 #define DICTATION_BUFFER_SIZE 128
 
 // One icon per Bring! section. Must match the ICON_* order in src/pkjs/categorize.js
@@ -65,14 +66,15 @@ typedef enum {
 } AppState;
 
 static Window *s_window;
+static StatusBarLayer *s_status_bar;
 static MenuLayer *s_menu_layer;
 static TextLayer *s_message_layer;
 static DictationSession *s_dictation_session;
 static GBitmap *s_category_icons[ICON_CATEGORY_COUNT];
-static GBitmap *s_add_icon;
 
 static BringItem s_items[MAX_ITEMS];
 static int s_item_count = 0;
+static char s_list_name[MAX_LIST_NAME_LEN];
 static AppState s_state = STATE_LOADING;
 // Sized for the longest localized message plus a list name of up to
 // MAX_ERROR_DETAIL characters (src/pkjs/index.js).
@@ -235,11 +237,17 @@ static const char *const MESSAGE_FONT_KEYS[] = {
 };
 #define MESSAGE_FONT_COUNT (int)(sizeof(MESSAGE_FONT_KEYS) / sizeof(MESSAGE_FONT_KEYS[0]))
 
-// Shows a full-screen message (loading, setup hint, errors) in the largest
+static GRect content_bounds(void) {
+  GRect bounds = layer_get_bounds(window_get_root_layer(s_window));
+  bounds.origin.y += STATUS_BAR_LAYER_HEIGHT;
+  bounds.size.h -= STATUS_BAR_LAYER_HEIGHT;
+  return bounds;
+}
+
+// Shows a message below the status bar (loading, setup hint, errors) in the largest
 // font that fits, centered horizontally and vertically.
 static void show_message(const char *text) {
-  Layer *window_layer = window_get_root_layer(s_window);
-  GRect bounds = layer_get_bounds(window_layer);
+  GRect bounds = content_bounds();
   // Round displays need a wider inset so text doesn't hit the curved edge.
   int16_t h_inset = PBL_IF_ROUND_ELSE(bounds.size.w / 8, 6);
   int16_t v_inset = PBL_IF_ROUND_ELSE(bounds.size.h / 10, 4);
@@ -322,11 +330,11 @@ static void dictation_session_callback(DictationSession *session, DictationSessi
 #if PBL_DISPLAY_HEIGHT >= 200
 #define ADD_ROW_HEIGHT 61
 #define ROW_INSET 10    // left inset of the system menu cells
-#define ICON_TEXT_GAP 9 // gap between icon and title in the system menu cells
+#define ICON_TEXT_GAP 9 // gap between icon and title in item rows
 #else
 #define ADD_ROW_HEIGHT 44
 #define ROW_INSET 5
-#define ICON_TEXT_GAP 5
+#define ICON_TEXT_GAP 5 // gap between icon and title in item rows
 #endif
 
 // Item rows use the cell heights of the system app launcher (PebbleOS
@@ -366,15 +374,16 @@ static int16_t menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t s
 static void menu_draw_header_callback(GContext *ctx, const Layer *cell_layer, uint16_t section_index,
                                        void *context) {
   if (section_index == 1) {
+    const char *header = s_list_name[0] ? s_list_name : s_strings->list_header;
 #if PBL_ROUND
     // The system header is left-aligned, which the round bezel clips; centre it instead
     // (same font and nudge as menu_cell_basic_header_draw).
     GRect box = layer_get_bounds(cell_layer);
     box.origin.y -= 1;
-    graphics_draw_text(ctx, s_strings->list_header, fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD), box,
+    graphics_draw_text(ctx, header, fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD), box,
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 #else
-    menu_cell_basic_header_draw(ctx, cell_layer, s_strings->list_header);
+    menu_cell_basic_header_draw(ctx, cell_layer, header);
 #endif
   }
 }
@@ -614,7 +623,7 @@ static void draw_item_row(GContext *ctx, const Layer *cell_layer, const BringIte
 
 static void menu_draw_row_callback(GContext *ctx, const Layer *cell_layer, MenuIndex *cell_index, void *context) {
   if (cell_index->section == 0) {
-    menu_cell_basic_draw(ctx, cell_layer, s_strings->add_item, s_strings->add_item_hint, s_add_icon);
+    menu_cell_basic_draw(ctx, cell_layer, s_strings->add_item, s_strings->add_item_hint, NULL);
     return;
   }
 
@@ -743,14 +752,22 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   }
 
   switch ((BringAction)action_tuple->value->int32) {
-    case ACTION_SYNC_START:
+    case ACTION_SYNC_START: {
       // The phone is answering: a retry would only start a second stream.
       if (s_retry_timer) {
         app_timer_cancel(s_retry_timer);
         s_retry_timer = NULL;
       }
       s_item_count = 0;
+      s_list_name[0] = '\0';
+      Tuple *list_name_t = dict_find(iterator, MESSAGE_KEY_listName);
+      if (list_name_t && list_name_t->type == TUPLE_CSTRING) {
+        strncpy(s_list_name, list_name_t->value->cstring, sizeof(s_list_name) - 1);
+        s_list_name[sizeof(s_list_name) - 1] = '\0';
+        truncate_utf8_in_place(s_list_name);
+      }
       break;
+    }
     case ACTION_SYNC_ITEM: {
       Tuple *idx_t = dict_find(iterator, MESSAGE_KEY_itemIndex);
       Tuple *name_t = dict_find(iterator, MESSAGE_KEY_itemName);
@@ -824,7 +841,7 @@ static void outbox_failed_callback(DictionaryIterator *iterator, AppMessageResul
 
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
-  GRect bounds = layer_get_bounds(window_layer);
+  GRect bounds = content_bounds();
 
   s_menu_layer = menu_layer_create(bounds);
   menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks) {
@@ -853,6 +870,10 @@ static void window_load(Window *window) {
   text_layer_set_overflow_mode(s_message_layer, GTextOverflowModeWordWrap);
   layer_add_child(window_layer, text_layer_get_layer(s_message_layer));
 
+  s_status_bar = status_bar_layer_create();
+  status_bar_layer_set_colors(s_status_bar, GColorWhite, GColorBlack);
+  layer_add_child(window_layer, status_bar_layer_get_layer(s_status_bar));
+
   s_dictation_session = dictation_session_create(DICTATION_BUFFER_SIZE, dictation_session_callback, NULL);
 
   // The colour icons don't convert well to black & white, so those watches show
@@ -861,7 +882,6 @@ static void window_load(Window *window) {
     for (int i = 0; i < ICON_CATEGORY_COUNT; i++) {
       s_category_icons[i] = gbitmap_create_with_resource(CATEGORY_RESOURCE_IDS[i]);
     }
-    s_add_icon = gbitmap_create_with_resource(RESOURCE_ID_ICON_APP);
   }
 
   update_ui();
@@ -884,12 +904,9 @@ static void window_unload(Window *window) {
       s_category_icons[i] = NULL;
     }
   }
-  if (s_add_icon) {
-    gbitmap_destroy(s_add_icon);
-    s_add_icon = NULL;
-  }
   text_layer_destroy(s_message_layer);
   menu_layer_destroy(s_menu_layer);
+  status_bar_layer_destroy(s_status_bar);
 }
 
 static void init(void) {
