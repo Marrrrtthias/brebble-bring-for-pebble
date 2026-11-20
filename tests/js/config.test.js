@@ -108,3 +108,25 @@ test('disable-touch checkbox reflects the saved setting and is sent back', funct
   assert.ok(on.indexOf('<input id="touchDisabled" type="checkbox" checked> Disable touch') >= 0);
   assert.ok(on.indexOf('touchDisabled: $("touchDisabled").checked') >= 0);
 });
+
+test('sort order card lists the sections in the given order and sends them back', function () {
+  setPhoneLanguage('en-US');
+  var page = pageOf({ sectionOrder: ['Tierbedarf'] });
+  var rows = page.match(/<ul id="order" class="order">([\s\S]*?)<\/ul>/)[1];
+  var sections = rows.match(/data-section="[^"]*"/g);
+  assert.strictEqual(sections.length, 14);
+  assert.strictEqual(sections[0], 'data-section="Tierbedarf"');
+  assert.strictEqual(sections[1], 'data-section="Früchte &amp; Gemüse"');
+  assert.ok(rows.indexOf('<span>Pet Supplies</span>') >= 0);
+  assert.ok(page.indexOf('sectionOrder: sectionOrder()') >= 0);
+  // The reset button restores Bring!'s order.
+  var defaults = JSON.parse(page.match(/var DEFAULT_ORDER_HTML = (".*?");/)[1]);
+  assert.strictEqual(defaults.match(/data-section="[^"]*"/)[0], 'data-section="Früchte &amp; Gemüse"');
+});
+
+test('sort order card defaults to the Bring! order', function () {
+  setPhoneLanguage('en-US');
+  var page = pageOf({ locale: 'de_DE' });
+  var rows = page.match(/<ul id="order" class="order">([\s\S]*?)<\/ul>/)[1];
+  assert.strictEqual(rows.match(/<span>([^<]*)<\/span>/)[1], 'Obst &amp; Gemüse');
+});

@@ -25,8 +25,12 @@ FakeXHR.prototype.send = function () {
       body = JSON.stringify({ lists: server.lists });
     } else if (/v2\/bringusers\//.test(xhr.url)) {
       body = JSON.stringify({ userLocale: { language: 'en', country: 'US' } });
+    } else if (/\/details$/.test(xhr.url)) {
+      body = '[]';
     } else if (/v2\/bringlists\//.test(xhr.url)) {
       body = JSON.stringify({ items: server.items });
+    } else if (/catalog\.[\w-]+\.json$/.test(xhr.url) && server.catalog) {
+      body = JSON.stringify(server.catalog);
     }
     if (status === 0) { xhr.onerror(); return; }
     xhr.status = status;
@@ -207,4 +211,39 @@ test('touch stays on by default, and a test does not save the setting', async fu
   assert.strictEqual(localStorage.getItem('bring_touchDisabled'), null);
   // The reopened page keeps the box ticked.
   assert.ok(opened[0].indexOf('id="touchDisabled" type="checkbox" checked') >= 0);
+});
+
+test('open items are sent grouped by section, in the saved order', async function () {
+  setup();
+  // Catalog items of the en-US account, by canonical (German) id.
+  server.items = { purchase: [{ itemId: 'Hundefutter' }, { itemId: 'Typed' }, { itemId: 'Äpfel' }],
+    recently: [{ itemId: 'Milch' }] };
+  server.catalog = { catalog: { sections: [
+    { sectionId: 'Früchte & Gemüse', items: [{ itemId: 'Äpfel' }] },
+    { sectionId: 'Tierbedarf', items: [{ itemId: 'Hundefutter' }] }
+  ] } };
+  closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '' });
+  await settle();
+  function itemNames() {
+    return sent.filter(function (m) { return m.action === 1; }).map(function (m) { return m.itemName; });
+  }
+  assert.deepStrictEqual(itemNames(), ['Äpfel', 'Hundefutter', 'Typed', 'Milch']);
+
+  // A new order is saved and used right away.
+  sent = [];
+  var order = ['Tierbedarf', 'Eigene Artikel'];
+  closeSettings({ action: 'save', email: 'a@example.com', password: '', listName: '', sectionOrder: order });
+  await settle();
+  assert.deepStrictEqual(JSON.parse(localStorage.getItem('bring_sectionOrder')).slice(0, 3),
+    ['Tierbedarf', 'Eigene Artikel', 'Früchte & Gemüse']);
+  assert.deepStrictEqual(itemNames(), ['Hundefutter', 'Typed', 'Äpfel', 'Milch']);
+
+  // The settings page shows it, and a test keeps the edited order without saving it.
+  listeners.showConfiguration();
+  assert.ok(opened[0].indexOf('<ul id="order" class="order"><li data-section="Tierbedarf">') >= 0);
+  closeSettings({ action: 'test', email: 'a@example.com', password: '', listName: '',
+    sectionOrder: ['Baumarkt & Garten'] });
+  await settle();
+  assert.ok(opened[1].indexOf('<ul id="order" class="order"><li data-section="Baumarkt &amp; Garten">') >= 0);
+  assert.strictEqual(JSON.parse(localStorage.getItem('bring_sectionOrder'))[0], 'Tierbedarf');
 });

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- open items are grouped by section, in the same order as the Bring! app; the section order can be changed in the settings
+
 ## Version 2.2.0
 
 - item icons now match the sections of your Bring! list, so more items get a fitting icon
