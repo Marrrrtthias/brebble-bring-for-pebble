@@ -75,8 +75,8 @@ language in `src/pkjs/categorize.js` (icon guess for free-typed items).
 Open items on the watch are grouped by their Bring! section, in the same
 order as the Bring! app shows them by default (fruit & vegetables, bread &
 pastries, milk & cheese, … home & garden, own items). Under **Sort order** on
-the settings page you can move sections up and down, or reset them to
-Bring!'s order; tap **Save** to apply it. Within a section, items keep the
+the settings page you can move sections up and down, or tap **Reset to
+default order** to go back to Bring!'s order; tap **Save** to apply it. Within a section, items keep the
 order Bring! returns them in. Items Bring! has no section for (free-typed
 items you never sorted into one) are shown under "own items", like in the
 Bring! app, even if their icon was guessed from the name. Completed items

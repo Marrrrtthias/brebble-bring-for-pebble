@@ -50,7 +50,7 @@ var TEXTS = {
     sortHint: 'Open items on the watch are grouped by section in this order, like in the Bring! app.',
     moveUp: 'Move up',
     moveDown: 'Move down',
-    resetOrder: 'Reset to Bring! order'
+    resetOrder: 'Reset to default order'
   },
   es: {
     title: 'Ajustes de Brebble',
@@ -83,7 +83,7 @@ var TEXTS = {
     sortHint: 'Los artículos pendientes se agrupan en el reloj por sección en este orden, como en la app Bring!.',
     moveUp: 'Subir',
     moveDown: 'Bajar',
-    resetOrder: 'Restablecer el orden de Bring!'
+    resetOrder: 'Restablecer el orden predeterminado'
   },
   de: {
     title: 'Brebble-Einstellungen',
@@ -116,7 +116,7 @@ var TEXTS = {
     sortHint: 'Offene Artikel werden auf der Uhr nach Bereichen in dieser Reihenfolge gruppiert, wie in der Bring!-App.',
     moveUp: 'Nach oben',
     moveDown: 'Nach unten',
-    resetOrder: 'Bring!-Reihenfolge wiederherstellen'
+    resetOrder: 'Standardreihenfolge wiederherstellen'
   },
   fr: {
     title: 'Paramètres Brebble',
@@ -149,7 +149,7 @@ var TEXTS = {
     sortHint: 'Sur la montre, les articles à acheter sont regroupés par rayon dans cet ordre, comme dans l’appli Bring!.',
     moveUp: 'Monter',
     moveDown: 'Descendre',
-    resetOrder: 'Rétablir l’ordre de Bring!'
+    resetOrder: 'Rétablir l’ordre par défaut'
   },
   it: {
     title: 'Impostazioni di Brebble',
@@ -182,7 +182,7 @@ var TEXTS = {
     sortHint: 'Sull’orologio gli articoli da comprare sono raggruppati per reparto in questo ordine, come nell’app Bring!.',
     moveUp: 'Sposta su',
     moveDown: 'Sposta giù',
-    resetOrder: 'Ripristina l’ordine di Bring!'
+    resetOrder: 'Ripristina l’ordine predefinito'
   },
   pt: {
     title: 'Configurações do Brebble',
@@ -215,7 +215,7 @@ var TEXTS = {
     sortHint: 'No relógio, os itens a comprar são agrupados por seção nesta ordem, como no app Bring!.',
     moveUp: 'Mover para cima',
     moveDown: 'Mover para baixo',
-    resetOrder: 'Restaurar a ordem do Bring!'
+    resetOrder: 'Restaurar a ordem padrão'
   }
 };
 
