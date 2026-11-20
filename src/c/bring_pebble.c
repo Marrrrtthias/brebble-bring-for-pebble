@@ -29,6 +29,7 @@ typedef enum {
 // Item details ("500 ml"), shown as a subtitle. The phone sends at most
 // MAX_DETAIL characters (src/pkjs/index.js); longer UTF-8 text is cut here.
 #define MAX_DETAIL_LEN 40
+#define MAX_LIST_NAME_LEN 128
 #define DICTATION_BUFFER_SIZE 128
 
 // One icon per Bring! section. Must match the ICON_* order in src/pkjs/categorize.js
@@ -73,6 +74,7 @@ static GBitmap *s_add_icon;
 
 static BringItem s_items[MAX_ITEMS];
 static int s_item_count = 0;
+static char s_list_name[MAX_LIST_NAME_LEN];
 static AppState s_state = STATE_LOADING;
 // Sized for the longest localized message plus a list name of up to
 // MAX_ERROR_DETAIL characters (src/pkjs/index.js).
@@ -366,15 +368,16 @@ static int16_t menu_get_header_height_callback(MenuLayer *menu_layer, uint16_t s
 static void menu_draw_header_callback(GContext *ctx, const Layer *cell_layer, uint16_t section_index,
                                        void *context) {
   if (section_index == 1) {
+    const char *header = s_list_name[0] ? s_list_name : s_strings->list_header;
 #if PBL_ROUND
     // The system header is left-aligned, which the round bezel clips; centre it instead
     // (same font and nudge as menu_cell_basic_header_draw).
     GRect box = layer_get_bounds(cell_layer);
     box.origin.y -= 1;
-    graphics_draw_text(ctx, s_strings->list_header, fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD), box,
+    graphics_draw_text(ctx, header, fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD), box,
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 #else
-    menu_cell_basic_header_draw(ctx, cell_layer, s_strings->list_header);
+    menu_cell_basic_header_draw(ctx, cell_layer, header);
 #endif
   }
 }
@@ -743,14 +746,22 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   }
 
   switch ((BringAction)action_tuple->value->int32) {
-    case ACTION_SYNC_START:
+    case ACTION_SYNC_START: {
       // The phone is answering: a retry would only start a second stream.
       if (s_retry_timer) {
         app_timer_cancel(s_retry_timer);
         s_retry_timer = NULL;
       }
       s_item_count = 0;
+      s_list_name[0] = '\0';
+      Tuple *list_name_t = dict_find(iterator, MESSAGE_KEY_listName);
+      if (list_name_t && list_name_t->type == TUPLE_CSTRING) {
+        strncpy(s_list_name, list_name_t->value->cstring, sizeof(s_list_name) - 1);
+        s_list_name[sizeof(s_list_name) - 1] = '\0';
+        truncate_utf8_in_place(s_list_name);
+      }
       break;
+    }
     case ACTION_SYNC_ITEM: {
       Tuple *idx_t = dict_find(iterator, MESSAGE_KEY_itemIndex);
       Tuple *name_t = dict_find(iterator, MESSAGE_KEY_itemName);

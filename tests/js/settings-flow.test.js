@@ -168,6 +168,36 @@ function touchMessages() {
   return sent.filter(function (m) { return 'touchDisabled' in m; });
 }
 
+test('sync sends the resolved default or selected list name, not the settings input', async function () {
+  setup();
+  closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '' });
+  await settle();
+  assert.deepStrictEqual(sent.filter(function (m) { return m.action === 7; }),
+    [{ action: 7, listName: 'Home' }]);
+
+  sent = [];
+  closeSettings({ action: 'save', email: 'a@example.com', password: '', listName: 'work' });
+  await settle();
+  assert.deepStrictEqual(sent.filter(function (m) { return m.action === 7; }),
+    [{ action: 7, listName: 'Work' }]);
+
+  sent = [];
+  listeners.appmessage({ payload: { action: 0 } });
+  await settle();
+  assert.strictEqual(sent.filter(function (m) { return m.action === 7; })[0].listName, 'Work');
+});
+
+test('sync bounds Unicode list names without splitting a surrogate pair, including empty lists', async function () {
+  setup();
+  var name = 'é'.repeat(39) + '🛒' + ' groceries';
+  server.lists[0].name = name;
+  server.items = { purchase: [], recently: [] };
+  closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '' });
+  await settle();
+  var actions = sent.filter(function (m) { return 'action' in m; });
+  assert.deepStrictEqual(actions, [{ action: 7, listName: 'é'.repeat(39) + '…' }, { action: 2 }]);
+});
+
 test('the disable-touch setting is saved and sent to the watch', async function () {
   setup();
   closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '', touchDisabled: true });
