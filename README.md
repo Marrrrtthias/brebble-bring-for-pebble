@@ -116,8 +116,15 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the tests and builds the
 Built `.pbw` files are attached to each
 [GitHub release](https://github.com/Marrrrtthias/brebble-bring-for-pebble/releases). A
 release is created automatically when a `v*` tag is pushed (see
-`.github/workflows/release.yml`). The app is also on the
+`.github/workflows/release.yml`). Once that succeeds, a separate job downloads
+the released `.pbw` and publishes it immediately to the
 [Pebble app store](https://apps.repebble.com/5403660269af4a0087f0cf95).
+Existing store screenshots and listing metadata are left unchanged.
+
+Store release notes come from the `## Version <version>` section in
+[`store/CHANGELOG.md`](store/CHANGELOG.md) matching `package.json`, not from the
+entire changelog or the generated GitHub release notes. A missing, duplicate or
+empty section fails the release before building.
 
 Version 2.0.0 uses a new app UUID, so it installs next to the original app
 instead of replacing it, and the settings must be entered again.
