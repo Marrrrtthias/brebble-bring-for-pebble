@@ -40,7 +40,8 @@
       "errorMsg",
       "errorCode",
       "locale",
-      "touchDisabled"
+      "touchDisabled",
+      "listName"
     ],
     "resources": {
       "media": [
