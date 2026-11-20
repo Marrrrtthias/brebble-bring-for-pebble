@@ -124,39 +124,7 @@ Existing store screenshots and listing metadata are left unchanged.
 Store release notes come from the `## Version <version>` section in
 [`store/CHANGELOG.md`](store/CHANGELOG.md) matching `package.json`, not from the
 entire changelog or the generated GitHub release notes. A missing, duplicate or
-empty section fails the release before building. Update the version and
-changelog, commit them, then push the matching tag (for example, `v2.3.0`).
-
-### One-time store publishing setup
-
-1. Sign in to the [Developer Dashboard](https://developer.repebble.com/dashboard)
-   with the account that owns Brebble. Confirm the existing app is editable and
-   has UUID `5a197acd-4c8b-4188-a39b-3bea717f1d64`. If it is still managed through
-   the old Rebble portal, follow the
-   [import and ownership verification guide](https://developer.repebble.com/guides/appstore-publishing/importing-from-rebble/)
-   first; do not create a second listing.
-2. In dashboard **Settings > Publish from GitHub Actions**, register
-   `Marrrrtthias/brebble-bring-for-pebble` and workflow file `release.yml`
-   (`.github/workflows/release.yml`) as a trusted publisher. Authorize the
-   release tag refs (`refs/tags/v*`), not just the `main` branch: this workflow
-   runs on tag pushes. Match any ref restrictions to the tags you will release.
-3. Ensure repository/organization Actions policy permits `id-token: write`.
-   Only the store publishing job requests it; builds and tests cannot mint
-   store tokens. Protect release tags with a GitHub tag ruleset so only
-   trusted maintainers can trigger publishing.
-
-No store API key, password, Firebase token secret, or personal GitHub token is
-needed. The pinned `pebble-tool` uses a short-lived GitHub OIDC token with
-audience `https://appstore-api.repebble.com`; GitHub supplies the release download
-token automatically. See the upstream
-[trusted publishing setup](https://github.com/coredevices/pebble-tool/pull/92).
-The dashboard authorization must be completed before the first automated
-upload; it cannot be verified locally without access to the owning account.
-
-If store publishing fails after the GitHub release is created, fix the
-authorization or upload error and use **Re-run failed jobs** in Actions.
-Do not rerun a successful store upload: the store rejects an already-used
-version. GitHub releases remain available even if the store upload fails.
+empty section fails the release before building.
 
 Version 2.0.0 uses a new app UUID, so it installs next to the original app
 instead of replacing it, and the settings must be entered again.
