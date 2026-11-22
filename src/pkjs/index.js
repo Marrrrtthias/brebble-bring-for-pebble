@@ -1,6 +1,7 @@
 var BringApi = require('./bring-api');
 var Config = require('./config');
 var Categorize = require('./categorize');
+var Sections = require('./sections');
 var Text = require('./text');
 
 var ACTION_REQUEST_SYNC = 0;
@@ -37,8 +38,9 @@ var MAX_LIST_NAME = 40;
 // with the change instead of an empty specification, which could clear them.
 var s_lastItems = [];
 
-// Bring! list entries -> [{ name, detail, done }], open items first.
-function toWatchItems(purchase, recently) {
+// Bring! list entries -> [{ name, detail, done }]: the open items grouped by
+// section in `sectionOrder` (see sections.js), then the completed ones.
+function toWatchItems(purchase, recently, sectionOrder) {
   var merged = [];
   function add(entries, done) {
     for (var i = 0; i < entries.length; i++) {
@@ -52,7 +54,7 @@ function toWatchItems(purchase, recently) {
   }
   add(purchase || [], false);
   add(recently || [], true);
-  return merged.slice(0, MAX_ITEMS);
+  return Sections.sortItems(merged, sectionOrder).slice(0, MAX_ITEMS);
 }
 
 // The details of the item the watch reports at `index`, if it is still the
@@ -232,7 +234,7 @@ function syncList() {
         sendError(ERR_READ_LIST);
         return;
       }
-      s_lastItems = toWatchItems(items.purchase, items.recently);
+      s_lastItems = toWatchItems(items.purchase, items.recently, Sections.loadOrder());
       // Item names are in the Bring! account's language. If that couldn't be
       // determined, catalog items were left untranslated, i.e. in German.
       sendItemsThenDone(syncId, s_lastItems, state.locale || BringApi.BRING_DEFAULT_LOCALE, state.listName);
@@ -344,6 +346,7 @@ function openSettings(draft, check) {
     password: draft ? draft.password : '',
     hasPassword: !!saved.password,
     touchDisabled: draft ? !!draft.touchDisabled : loadTouchDisabled(),
+    sectionOrder: draft ? Sections.normalizeOrder(draft.sectionOrder) : Sections.loadOrder(),
     locale: currentWatchLocale(),
     check: check
   }));
@@ -361,11 +364,15 @@ Pebble.addEventListener('webviewclosed', function (e) {
   if (!data) {
     return;
   }
-  // The watch setting does not depend on the account, so it is saved (and
-  // sent to the watch) even if the credentials are incomplete.
+  // The watch settings do not depend on the account, so they are saved (and
+  // sent to the watch) even if the credentials are incomplete. A new section
+  // order reaches the watch with the sync after the check below.
   if (data.action === 'save' && typeof data.touchDisabled === 'boolean') {
     saveTouchDisabled(data.touchDisabled);
     sendWatchSettings();
+  }
+  if (data.action === 'save' && Array.isArray(data.sectionOrder)) {
+    Sections.saveOrder(data.sectionOrder);
   }
   var email = String(data.email || '').trim();
   var typedPassword = String(data.password || '');
@@ -383,7 +390,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
       var check = checkRecord(result, email, wantedListName, true);
       BringApi.saveLastCheck(check);
       openSettings({ email: email, password: typedPassword, listName: wantedListName,
-                     touchDisabled: !!data.touchDisabled }, check);
+                     touchDisabled: !!data.touchDisabled, sectionOrder: data.sectionOrder }, check);
     });
     return;
   }

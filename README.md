@@ -51,6 +51,8 @@ language in `src/pkjs/categorize.js` (icon guess for free-typed items).
     test) that opens in the phone's browser.
   - `categorize.js`: maps an item's Bring! section to its icon, with a
     keyword-based guess for items without a section.
+  - `sections.js`: groups the open items by section, in Bring!'s section
+    order or the one set on the settings page.
   - `index.js`: ties everything together, handling watch messages and
     configuration events.
 
@@ -67,6 +69,9 @@ language in `src/pkjs/categorize.js` (icon guess for free-typed items).
 5. Tap **Save**. The watch syncs automatically as soon as the settings are
    saved. The next time you open Settings, it shows the result of the last
    check of the saved settings.
+
+Open items on the watch are grouped by Bring! section, in Bring!'s default
+section order unless you change it in the settings.
 
 The settings page can't call Bring! itself (Bring!'s API rejects requests
 from a browser), so the test runs in the Pebble app's JavaScript and the page
