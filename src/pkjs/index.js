@@ -29,6 +29,10 @@ var MAX_ITEMS = 80; // must match MAX_ITEMS in src/c/bring_pebble.c
 // anyway.
 var MAX_DETAIL = 36;
 
+// At most 123 UTF-8 bytes including a truncation ellipsis; fits the watch's
+// MAX_LIST_NAME_LEN buffer and aplite's 512-byte inbox.
+var MAX_LIST_NAME = 40;
+
 // The items last sent to the watch, by index. Toggling an item on the watch
 // only reports its name, so the details are looked up here and sent back
 // with the change instead of an empty specification, which could clear them.
@@ -168,7 +172,7 @@ function sendError(code, detail) {
 // stop, so two streams never interleave on the watch.
 var s_syncId = 0;
 
-function sendItemsThenDone(syncId, items, locale) {
+function sendItemsThenDone(syncId, items, locale, listName) {
   function afterStart() {
     var i = 0;
     function sendNext() {
@@ -201,7 +205,10 @@ function sendItemsThenDone(syncId, items, locale) {
   // Tells the watch to discard its current list before the new one streams
   // in, so a shrunk list (e.g. an item got completed) doesn't leave stale
   // rows behind.
-  Pebble.sendAppMessage({ action: ACTION_SYNC_START }, afterStart, afterStart);
+  Pebble.sendAppMessage({
+    action: ACTION_SYNC_START,
+    listName: Text.truncateText(listName, MAX_LIST_NAME)
+  }, afterStart, afterStart);
 }
 
 function doSync() {
@@ -230,7 +237,7 @@ function syncList() {
       s_lastItems = toWatchItems(items.purchase, items.recently, Sections.loadOrder());
       // Item names are in the Bring! account's language. If that couldn't be
       // determined, catalog items were left untranslated, i.e. in German.
-      sendItemsThenDone(syncId, s_lastItems, state.locale || BringApi.BRING_DEFAULT_LOCALE);
+      sendItemsThenDone(syncId, s_lastItems, state.locale || BringApi.BRING_DEFAULT_LOCALE, state.listName);
     });
   });
 }

@@ -4,6 +4,12 @@
 
 - open items are grouped by section, in the same order as the Bring! app; the section order can be changed in the settings
 
+## Version 2.3.0
+
+- UI changes:
+  - The list header now shows the name of your Bring list
+  - The current time is always shown at the top of the screen
+
 ## Version 2.2.0
 
 - item icons now match the sections of your Bring! list, so more items get a fitting icon
