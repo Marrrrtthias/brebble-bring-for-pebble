@@ -19,6 +19,7 @@ var ERR_READ_LIST = 2;
 var ERR_LOGIN = 3;
 var ERR_NO_LISTS = 4;
 var ERR_LIST_NOT_FOUND = 5;
+var ERR_PERMISSION = 7; // internet access not allowed in the Pebble app (yet)
 
 var MAX_ITEMS = 80; // must match MAX_ITEMS in src/c/bring_pebble.c
 
@@ -75,8 +76,15 @@ function errorCodeFor(result) {
     case 'login': return ERR_LOGIN;
     case 'no_lists': return ERR_NO_LISTS;
     case 'list_not_found': return ERR_LIST_NOT_FOUND;
+    case 'permission': return ERR_PERMISSION;
     default: return ERR_CONNECT_BRING;
   }
+}
+
+// Watch error code for a failed BringApi.ensureAuth.
+function authErrorCode(err) {
+  if (BringApi.isLoginRejected(err)) { return ERR_LOGIN; }
+  return BringApi.isPermissionMissing(err) ? ERR_PERMISSION : ERR_CONNECT_BRING;
 }
 
 // Checks the saved credentials and list name. On success the session and the
@@ -221,7 +229,7 @@ function syncList() {
   var syncId = ++s_syncId;
   BringApi.ensureAuth(function (authErr, state) {
     if (authErr) {
-      sendError(BringApi.isLoginRejected(authErr) ? ERR_LOGIN : ERR_CONNECT_BRING);
+      sendError(authErrorCode(authErr));
       return;
     }
     BringApi.getListItems(state, function (err, items) {
@@ -229,7 +237,7 @@ function syncList() {
         return;
       }
       if (err) {
-        sendError(ERR_READ_LIST);
+        sendError(BringApi.isPermissionMissing(err) ? ERR_PERMISSION : ERR_READ_LIST);
         return;
       }
       s_lastItems = toWatchItems(items.purchase, items.recently);
@@ -250,7 +258,7 @@ function withAuth(action) {
   resolveListThen(function () {
     BringApi.ensureAuth(function (authErr, state) {
       if (authErr) {
-        sendError(BringApi.isLoginRejected(authErr) ? ERR_LOGIN : ERR_CONNECT_BRING);
+        sendError(authErrorCode(authErr));
         return;
       }
       action(state);

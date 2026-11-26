@@ -93,3 +93,20 @@ test('item details sent by JS fit the watch buffer when they are plain ASCII', f
   // JS adds a 3-byte "…" when it shortens a detail; the watch needs a NUL too.
   assert.ok(js + 3 + 1 <= c, 'MAX_DETAIL ' + js + ' vs MAX_DETAIL_LEN ' + c);
 });
+
+test('every host the phone requests is declared as an optional Internet permission', function () {
+  var declared = JSON.parse(read('package.json')).pebble.usesPermissions;
+  var hosts = {};
+  (read('src/pkjs/bring-api.js').match(/var \w+ = 'https:\/\/[^/']+/g) || []).forEach(function (m) {
+    hosts[m.replace(/^.*https:\/\//, '')] = true;
+  });
+  assert.deepStrictEqual(Object.keys(hosts).sort(), ['api.getbring.com', 'web.getbring.com']);
+  Object.keys(hosts).forEach(function (host) {
+    var entry = declared.filter(function (p) {
+      return p.name === 'Internet' && p.parameters.domains.indexOf(host) >= 0;
+    });
+    assert.strictEqual(entry.length, 1, host);
+    assert.strictEqual(entry[0].required, false, host);
+    assert.ok(entry[0].reason, host);
+  });
+});

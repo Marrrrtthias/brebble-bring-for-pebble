@@ -19,6 +19,7 @@ typedef struct {
   const char *err_login;
   const char *err_no_lists;
   const char *err_list_not_found; // contains one %s for the list name
+  const char *err_permission;
 } Strings;
 
 // Returns the strings for a locale such as "de_DE" (NULL or unknown

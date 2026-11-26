@@ -153,6 +153,45 @@ function authHeaders(state) {
   return h;
 }
 
+// Requests reach api.getbring.com and web.getbring.com under the optional
+// Internet permissions declared in package.json's usesPermissions: the Pebble
+// app asks for each the first time it is used. Until the user allows it, or if
+// they turned it off, a request fails without a response like a network error.
+// Pebble.permissions.query tells these apart; phone apps without the
+// permission system have no Pebble.permissions.
+function permissionState(url, callback) {
+  var answered = false;
+  function answer(state) {
+    if (answered) { return; }
+    answered = true;
+    callback(state);
+  }
+  var host = /^https?:\/\/([^\/?#]+)/i.exec(url);
+  var permissions = typeof Pebble !== 'undefined' && Pebble.permissions;
+  if (!host || !permissions || typeof permissions.query !== 'function') {
+    answer(null);
+    return;
+  }
+  try {
+    permissions.query('Internet/' + host[1].toLowerCase()).then(answer, function () { answer(null); });
+  } catch (e) {
+    answer(null);
+  }
+}
+
+// A request that got no response: err.permission is 'prompt' or 'denied' when
+// the user hasn't allowed (or turned off) internet access for the host.
+function failWithoutResponse(url, message, callback) {
+  var err = new Error(message);
+  err.status = 0;
+  permissionState(url, function (state) {
+    if (state === 'prompt' || state === 'denied') {
+      err.permission = state;
+    }
+    callback(err, null, 0);
+  });
+}
+
 function xhrRequest(method, url, headers, body, callback) {
   var xhr = new XMLHttpRequest();
   xhr.timeout = 15000;
@@ -172,14 +211,10 @@ function xhrRequest(method, url, headers, body, callback) {
     }
   };
   xhr.onerror = function () {
-    var err = new Error('network error');
-    err.status = 0;
-    callback(err, null, 0);
+    failWithoutResponse(url, 'network error', callback);
   };
   xhr.ontimeout = function () {
-    var err = new Error('timeout');
-    err.status = 0;
-    callback(err, null, 0);
+    failWithoutResponse(url, 'timeout', callback);
   };
   xhr.open(method, url, true);
   var k;
@@ -415,6 +450,11 @@ function isLoginRejected(err) {
   return !!(err && err.status >= 400 && err.status < 500);
 }
 
+// The user hasn't allowed Brebble! internet access in the Pebble app (yet).
+function isPermissionMissing(err) {
+  return !!(err && err.permission);
+}
+
 // Picks the list to show: the one named `wanted` (case-insensitive), or the
 // account's default list when `wanted` is empty. null when not found.
 function pickList(lists, wanted, defaultListUuid) {
@@ -440,13 +480,17 @@ function pickList(lists, wanted, defaultListUuid) {
 // list has not been resolved yet. Runs in PebbleKit JS (not the settings
 // webview) because Bring!'s API rejects browser-origin (CORS) requests.
 //
+function connectReason(err) {
+  return isPermissionMissing(err) ? 'permission' : 'connect';
+}
+
 // callback(result): result.ok, result.reason ('login' | 'connect' |
-// 'no_lists' | 'list_not_found'), result.lists (names), and when ok,
-// result.state (session + listUuid/listName, ready for saveState).
+// 'permission' | 'no_lists' | 'list_not_found'), result.lists (names), and
+// when ok, result.state (session + listUuid/listName, ready for saveState).
 function checkAccount(email, password, wantedListName, callback) {
   login(email, password, function (err, data) {
     if (err || !data || !data.access_token) {
-      callback({ ok: false, reason: isLoginRejected(err) ? 'login' : 'connect', lists: [] });
+      callback({ ok: false, reason: isLoginRejected(err) ? 'login' : connectReason(err), lists: [] });
       return;
     }
     var state = {
@@ -462,7 +506,7 @@ function checkAccount(email, password, wantedListName, callback) {
     applyUserLocale(state, function (state2) {
       loadLists(state2, function (err2, lists) {
         if (err2) {
-          callback({ ok: false, reason: 'connect', lists: [] });
+          callback({ ok: false, reason: connectReason(err2), lists: [] });
           return;
         }
         var names = lists.map(function (l) { return String(l.name); });
@@ -558,6 +602,7 @@ module.exports = {
   saveLastCheck: saveLastCheck,
   loadLastCheck: loadLastCheck,
   isLoginRejected: isLoginRejected,
+  isPermissionMissing: isPermissionMissing,
   pickList: pickList,
   checkAccount: checkAccount,
   ensureAuth: ensureAuth,

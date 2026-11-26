@@ -30,6 +30,20 @@
     "capabilities": [
       "configurable"
     ],
+    "usesPermissions": [
+      {
+        "name": "Internet",
+        "parameters": { "domains": ["api.getbring.com"] },
+        "reason": "To sync your shopping list with Bring!",
+        "required": false
+      },
+      {
+        "name": "Internet",
+        "parameters": { "domains": ["web.getbring.com"] },
+        "reason": "To show item names in your language, with matching icons",
+        "required": false
+      }
+    ],
     "messageKeys": [
       "action",
       "itemIndex",

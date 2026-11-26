@@ -85,6 +85,24 @@ again when the refresh token expires; if that concerns you, it is easy to
 change `bring-api.js` to not persist it and ask for the login again when the
 refresh fails.
 
+### Permissions
+
+Brebble! only asks for internet access to the two Bring! hosts it uses, and
+only when it first needs them, not at install (`usesPermissions` in
+`package.json`, both with `"required": false`):
+
+- `api.getbring.com`, to log in and sync the list. The Pebble app asks for it
+  the first time you test or save your settings.
+- `web.getbring.com`, to show catalog item names in your account's language
+  and pick their section icons. It is asked for at the first sync; without it,
+  items keep Bring!'s German names and their icons are guessed from the name.
+
+Until internet access is allowed (or if it is turned off later), the watch and
+the settings page say so instead of reporting a connection error. The phone
+side checks this with `Pebble.permissions.query`; phone apps without the
+permission system keep the old behavior. Declare any new host there before
+requesting it (`tests/js/consistency.test.js` checks this).
+
 ## Build and install
 
 ```sh
