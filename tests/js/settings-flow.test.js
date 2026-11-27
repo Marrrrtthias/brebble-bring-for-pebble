@@ -271,3 +271,14 @@ test('without a permission problem, no response is still a connection error', as
     assert.strictEqual(sent[sent.length - 1].errorCode, 1); // ERR_CONNECT_BRING
   }
 });
+
+test('a permission query that never answers still reports a connection error', async function () {
+  setup();
+  globalThis.Pebble.permissions = { query: function () { return new Promise(function () {}); } };
+  server.login = 0;
+  closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '' });
+  await new Promise(function (resolve) {
+    setTimeout(resolve, require('../../src/pkjs/bring-api').PERMISSION_QUERY_TIMEOUT_MS + 100);
+  });
+  assert.strictEqual(sent[sent.length - 1].errorCode, 1); // ERR_CONNECT_BRING
+});

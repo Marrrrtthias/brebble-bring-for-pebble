@@ -158,12 +158,18 @@ function authHeaders(state) {
 // app asks for them at install. If the user denied one, or turned it off
 // later, a request fails without a response like a network error.
 // Pebble.permissions.query tells these apart; phone apps without the
-// permission system have no Pebble.permissions.
+// permission system have no Pebble.permissions. A query that hasn't answered
+// after PERMISSION_QUERY_TIMEOUT_MS counts as unknown, so the request's error
+// is still reported.
+var PERMISSION_QUERY_TIMEOUT_MS = 2000;
+
 function permissionState(url, callback) {
   var answered = false;
+  var timer = null;
   function answer(state) {
     if (answered) { return; }
     answered = true;
+    if (timer !== null) { clearTimeout(timer); }
     callback(state);
   }
   var host = /^https?:\/\/([^\/?#]+)/i.exec(url);
@@ -172,6 +178,7 @@ function permissionState(url, callback) {
     answer(null);
     return;
   }
+  timer = setTimeout(function () { answer(null); }, PERMISSION_QUERY_TIMEOUT_MS);
   try {
     permissions.query('Internet/' + host[1].toLowerCase()).then(answer, function () { answer(null); });
   } catch (e) {
@@ -455,6 +462,11 @@ function isPermissionMissing(err) {
   return !!(err && err.permission);
 }
 
+// checkAccount's reason for a request that failed without a login rejection.
+function connectReason(err) {
+  return isPermissionMissing(err) ? 'permission' : 'connect';
+}
+
 // Picks the list to show: the one named `wanted` (case-insensitive), or the
 // account's default list when `wanted` is empty. null when not found.
 function pickList(lists, wanted, defaultListUuid) {
@@ -480,10 +492,6 @@ function pickList(lists, wanted, defaultListUuid) {
 // list has not been resolved yet. Runs in PebbleKit JS (not the settings
 // webview) because Bring!'s API rejects browser-origin (CORS) requests.
 //
-function connectReason(err) {
-  return isPermissionMissing(err) ? 'permission' : 'connect';
-}
-
 // callback(result): result.ok, result.reason ('login' | 'connect' |
 // 'permission' | 'no_lists' | 'list_not_found'), result.lists (names), and
 // when ok, result.state (session + listUuid/listName, ready for saveState).
@@ -603,6 +611,7 @@ module.exports = {
   loadLastCheck: loadLastCheck,
   isLoginRejected: isLoginRejected,
   isPermissionMissing: isPermissionMissing,
+  PERMISSION_QUERY_TIMEOUT_MS: PERMISSION_QUERY_TIMEOUT_MS,
   pickList: pickList,
   checkAccount: checkAccount,
   ensureAuth: ensureAuth,
