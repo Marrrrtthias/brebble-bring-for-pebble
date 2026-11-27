@@ -94,7 +94,7 @@ test('item details sent by JS fit the watch buffer when they are plain ASCII', f
   assert.ok(js + 3 + 1 <= c, 'MAX_DETAIL ' + js + ' vs MAX_DETAIL_LEN ' + c);
 });
 
-test('every host the phone requests is declared as an optional Internet permission', function () {
+test('every host the phone requests is declared as a required Internet permission', function () {
   var declared = JSON.parse(read('package.json')).pebble.usesPermissions;
   var hosts = {};
   (read('src/pkjs/bring-api.js').match(/var \w+ = 'https:\/\/[^/']+/g) || []).forEach(function (m) {
@@ -106,7 +106,7 @@ test('every host the phone requests is declared as an optional Internet permissi
       return p.name === 'Internet' && p.parameters.domains.indexOf(host) >= 0;
     });
     assert.strictEqual(entry.length, 1, host);
-    assert.strictEqual(entry[0].required, false, host);
+    assert.strictEqual(entry[0].required, true, host);
     assert.ok(entry[0].reason, host);
   });
 });

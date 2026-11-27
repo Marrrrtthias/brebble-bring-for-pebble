@@ -153,10 +153,10 @@ function authHeaders(state) {
   return h;
 }
 
-// Requests reach api.getbring.com and web.getbring.com under the optional
+// Requests reach api.getbring.com and web.getbring.com under the required
 // Internet permissions declared in package.json's usesPermissions: the Pebble
-// app asks for each the first time it is used. Until the user allows it, or if
-// they turned it off, a request fails without a response like a network error.
+// app asks for them at install. If the user denied one, or turned it off
+// later, a request fails without a response like a network error.
 // Pebble.permissions.query tells these apart; phone apps without the
 // permission system have no Pebble.permissions.
 function permissionState(url, callback) {

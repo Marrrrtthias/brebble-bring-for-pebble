@@ -35,13 +35,13 @@
         "name": "Internet",
         "parameters": { "domains": ["api.getbring.com"] },
         "reason": "To sync your shopping list with Bring!",
-        "required": false
+        "required": true
       },
       {
         "name": "Internet",
         "parameters": { "domains": ["web.getbring.com"] },
         "reason": "To show item names in your language, with matching icons",
-        "required": false
+        "required": true
       }
     ],
     "messageKeys": [
