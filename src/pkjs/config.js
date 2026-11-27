@@ -38,6 +38,7 @@ var TEXTS = {
     notSavedYet: 'Not saved yet: tap Save to use these settings.',
     errLogin: 'Bring! did not accept this email and password.',
     errConnect: 'Could not reach Bring!. Check the phone’s internet connection and try again.',
+    errPermission: 'Brebble! is not allowed to use the internet yet. Allow it in the Pebble app, then try again.',
     errNoLists: 'This Bring! account has no lists.',
     errListNotFound: 'This account has no list named “%s”.',
     yourLists: 'Your lists (tap to pick one):',
@@ -66,6 +67,7 @@ var TEXTS = {
     notSavedYet: 'Aún no se ha guardado: pulsa Guardar para usar estos ajustes.',
     errLogin: 'Bring! no aceptó este email y contraseña.',
     errConnect: 'No se pudo conectar con Bring!. Revisa la conexión a internet del teléfono e inténtalo de nuevo.',
+    errPermission: 'Brebble! todavía no tiene permiso para usar internet. Permítelo en la app Pebble e inténtalo de nuevo.',
     errNoLists: 'Esta cuenta de Bring! no tiene listas.',
     errListNotFound: 'Esta cuenta no tiene ninguna lista llamada «%s».',
     yourLists: 'Tus listas (pulsa para elegir una):',
@@ -94,6 +96,7 @@ var TEXTS = {
     notSavedYet: 'Noch nicht gespeichert: Tippe auf Speichern, um diese Einstellungen zu verwenden.',
     errLogin: 'Bring! hat diese E-Mail und dieses Passwort nicht akzeptiert.',
     errConnect: 'Bring! ist nicht erreichbar. Prüfe die Internetverbindung des Handys und versuche es erneut.',
+    errPermission: 'Brebble! darf noch nicht ins Internet. Erlaube es in der Pebble-App und versuche es erneut.',
     errNoLists: 'Dieses Bring!-Konto hat keine Listen.',
     errListNotFound: 'In diesem Konto gibt es keine Liste namens „%s“.',
     yourLists: 'Deine Listen (zum Auswählen antippen):',
@@ -122,6 +125,7 @@ var TEXTS = {
     notSavedYet: 'Pas encore enregistré : appuyez sur Enregistrer pour utiliser ces paramètres.',
     errLogin: 'Bring! n’a pas accepté cet e-mail et ce mot de passe.',
     errConnect: 'Impossible de joindre Bring!. Vérifiez la connexion internet du téléphone et réessayez.',
+    errPermission: 'Brebble! n’est pas encore autorisé à utiliser internet. Autorisez-le dans l’appli Pebble, puis réessayez.',
     errNoLists: 'Ce compte Bring! n’a aucune liste.',
     errListNotFound: 'Ce compte n’a aucune liste nommée « %s ».',
     yourLists: 'Vos listes (appuyez pour en choisir une) :',
@@ -150,6 +154,7 @@ var TEXTS = {
     notSavedYet: 'Non ancora salvato: tocca Salva per usare queste impostazioni.',
     errLogin: 'Bring! non ha accettato questa email e password.',
     errConnect: 'Impossibile raggiungere Bring!. Controlla la connessione internet del telefono e riprova.',
+    errPermission: 'Brebble! non ha ancora il permesso di usare internet. Consentilo nell’app Pebble, poi riprova.',
     errNoLists: 'Questo account Bring! non ha liste.',
     errListNotFound: 'Questo account non ha nessuna lista chiamata «%s».',
     yourLists: 'Le tue liste (tocca per sceglierne una):',
@@ -178,6 +183,7 @@ var TEXTS = {
     notSavedYet: 'Ainda não salvo: toque em Salvar para usar estas configurações.',
     errLogin: 'O Bring! não aceitou este e-mail e senha.',
     errConnect: 'Não foi possível acessar o Bring!. Verifique a conexão com a internet do telefone e tente de novo.',
+    errPermission: 'O Brebble! ainda não tem permissão para usar a internet. Permita no app Pebble e tente de novo.',
     errNoLists: 'Esta conta do Bring! não tem listas.',
     errListNotFound: 'Esta conta não tem nenhuma lista chamada “%s”.',
     yourLists: 'Suas listas (toque para escolher uma):',
@@ -257,6 +263,8 @@ function statusHtml(check, t) {
     message = escapeHtml(t.errNoLists);
   } else if (check.reason === 'list_not_found') {
     message = fill(t.errListNotFound, check.wantedListName || '');
+  } else if (check.reason === 'permission') {
+    message = escapeHtml(t.errPermission);
   } else {
     message = escapeHtml(t.errConnect);
   }

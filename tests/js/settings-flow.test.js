@@ -238,3 +238,47 @@ test('touch stays on by default, and a test does not save the setting', async fu
   // The reopened page keeps the box ticked.
   assert.ok(opened[0].indexOf('id="touchDisabled" type="checkbox" checked') >= 0);
 });
+
+test('a missing internet permission is reported as such on the watch and the settings page', async function () {
+  setup();
+  var queried = [];
+  globalThis.Pebble.permissions = {
+    query: function (name) { queried.push(name); return Promise.resolve('prompt'); }
+  };
+  server.login = 0;
+  closeSettings({ action: 'test', email: 'a@example.com', password: 'secret', listName: '' });
+  await settle();
+  assert.deepStrictEqual(queried, ['Internet/api.getbring.com']);
+  assert.ok(opened[0].indexOf('not allowed to use the internet yet') >= 0);
+
+  closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '' });
+  await settle();
+  assert.strictEqual(sent[sent.length - 1].errorCode, 7); // ERR_PERMISSION
+  assert.strictEqual(localStorage.getItem('bring_password'), 'secret');
+});
+
+test('without a permission problem, no response is still a connection error', async function () {
+  for (var permissions of [
+    { query: function () { return Promise.resolve('granted'); } },
+    { query: function () { return Promise.reject(new Error('unknown permission')); } },
+    { query: function () { throw new Error('not supported'); } }
+  ]) {
+    setup();
+    globalThis.Pebble.permissions = permissions;
+    server.login = 0;
+    closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '' });
+    await settle();
+    assert.strictEqual(sent[sent.length - 1].errorCode, 1); // ERR_CONNECT_BRING
+  }
+});
+
+test('a permission query that never answers still reports a connection error', async function () {
+  setup();
+  globalThis.Pebble.permissions = { query: function () { return new Promise(function () {}); } };
+  server.login = 0;
+  closeSettings({ action: 'save', email: 'a@example.com', password: 'secret', listName: '' });
+  await new Promise(function (resolve) {
+    setTimeout(resolve, require('../../src/pkjs/bring-api').PERMISSION_QUERY_TIMEOUT_MS + 100);
+  });
+  assert.strictEqual(sent[sent.length - 1].errorCode, 1); // ERR_CONNECT_BRING
+});

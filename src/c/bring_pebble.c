@@ -22,6 +22,7 @@ typedef enum {
   ERR_NO_LISTS       = 4, // the account has no lists
   ERR_LIST_NOT_FOUND = 5, // errorMsg holds the requested list name
   ERR_PHONE          = 6, // watch-local: the phone never answered
+  ERR_PERMISSION     = 7, // internet access not allowed in the Pebble app (yet)
 } BringError;
 
 #define MAX_ITEMS 80
@@ -137,6 +138,7 @@ static void set_error_message(BringError code, const char *detail) {
     case ERR_LOGIN:         text = s_strings->err_login; break;
     case ERR_NO_LISTS:      text = s_strings->err_no_lists; break;
     case ERR_PHONE:         text = s_strings->err_phone; break;
+    case ERR_PERMISSION:    text = s_strings->err_permission; break;
     case ERR_LIST_NOT_FOUND:
       snprintf(s_message_text, sizeof(s_message_text), s_strings->err_list_not_found, detail ? detail : "");
       truncate_utf8_in_place(s_message_text);

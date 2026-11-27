@@ -153,6 +153,52 @@ function authHeaders(state) {
   return h;
 }
 
+// Requests reach api.getbring.com and web.getbring.com under the required
+// Internet permissions declared in package.json's usesPermissions: the Pebble
+// app asks for them at install. If the user denied one, or turned it off
+// later, a request fails without a response like a network error.
+// Pebble.permissions.query tells these apart; phone apps without the
+// permission system have no Pebble.permissions. A query that hasn't answered
+// after PERMISSION_QUERY_TIMEOUT_MS counts as unknown, so the request's error
+// is still reported.
+var PERMISSION_QUERY_TIMEOUT_MS = 2000;
+
+function permissionState(url, callback) {
+  var answered = false;
+  var timer = null;
+  function answer(state) {
+    if (answered) { return; }
+    answered = true;
+    if (timer !== null) { clearTimeout(timer); }
+    callback(state);
+  }
+  var host = /^https?:\/\/([^\/?#]+)/i.exec(url);
+  var permissions = typeof Pebble !== 'undefined' && Pebble.permissions;
+  if (!host || !permissions || typeof permissions.query !== 'function') {
+    answer(null);
+    return;
+  }
+  timer = setTimeout(function () { answer(null); }, PERMISSION_QUERY_TIMEOUT_MS);
+  try {
+    permissions.query('Internet/' + host[1].toLowerCase()).then(answer, function () { answer(null); });
+  } catch (e) {
+    answer(null);
+  }
+}
+
+// A request that got no response: err.permission is 'prompt' or 'denied' when
+// the user hasn't allowed (or turned off) internet access for the host.
+function failWithoutResponse(url, message, callback) {
+  var err = new Error(message);
+  err.status = 0;
+  permissionState(url, function (state) {
+    if (state === 'prompt' || state === 'denied') {
+      err.permission = state;
+    }
+    callback(err, null, 0);
+  });
+}
+
 function xhrRequest(method, url, headers, body, callback) {
   var xhr = new XMLHttpRequest();
   xhr.timeout = 15000;
@@ -172,14 +218,10 @@ function xhrRequest(method, url, headers, body, callback) {
     }
   };
   xhr.onerror = function () {
-    var err = new Error('network error');
-    err.status = 0;
-    callback(err, null, 0);
+    failWithoutResponse(url, 'network error', callback);
   };
   xhr.ontimeout = function () {
-    var err = new Error('timeout');
-    err.status = 0;
-    callback(err, null, 0);
+    failWithoutResponse(url, 'timeout', callback);
   };
   xhr.open(method, url, true);
   var k;
@@ -415,6 +457,16 @@ function isLoginRejected(err) {
   return !!(err && err.status >= 400 && err.status < 500);
 }
 
+// The user hasn't allowed Brebble! internet access in the Pebble app (yet).
+function isPermissionMissing(err) {
+  return !!(err && err.permission);
+}
+
+// checkAccount's reason for a request that failed without a login rejection.
+function connectReason(err) {
+  return isPermissionMissing(err) ? 'permission' : 'connect';
+}
+
 // Picks the list to show: the one named `wanted` (case-insensitive), or the
 // account's default list when `wanted` is empty. null when not found.
 function pickList(lists, wanted, defaultListUuid) {
@@ -441,12 +493,12 @@ function pickList(lists, wanted, defaultListUuid) {
 // webview) because Bring!'s API rejects browser-origin (CORS) requests.
 //
 // callback(result): result.ok, result.reason ('login' | 'connect' |
-// 'no_lists' | 'list_not_found'), result.lists (names), and when ok,
-// result.state (session + listUuid/listName, ready for saveState).
+// 'permission' | 'no_lists' | 'list_not_found'), result.lists (names), and
+// when ok, result.state (session + listUuid/listName, ready for saveState).
 function checkAccount(email, password, wantedListName, callback) {
   login(email, password, function (err, data) {
     if (err || !data || !data.access_token) {
-      callback({ ok: false, reason: isLoginRejected(err) ? 'login' : 'connect', lists: [] });
+      callback({ ok: false, reason: isLoginRejected(err) ? 'login' : connectReason(err), lists: [] });
       return;
     }
     var state = {
@@ -462,7 +514,7 @@ function checkAccount(email, password, wantedListName, callback) {
     applyUserLocale(state, function (state2) {
       loadLists(state2, function (err2, lists) {
         if (err2) {
-          callback({ ok: false, reason: 'connect', lists: [] });
+          callback({ ok: false, reason: connectReason(err2), lists: [] });
           return;
         }
         var names = lists.map(function (l) { return String(l.name); });
@@ -558,6 +610,8 @@ module.exports = {
   saveLastCheck: saveLastCheck,
   loadLastCheck: loadLastCheck,
   isLoginRejected: isLoginRejected,
+  isPermissionMissing: isPermissionMissing,
+  PERMISSION_QUERY_TIMEOUT_MS: PERMISSION_QUERY_TIMEOUT_MS,
   pickList: pickList,
   checkAccount: checkAccount,
   ensureAuth: ensureAuth,
